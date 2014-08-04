@@ -1,4 +1,4 @@
-NetworkPlan
+NetworkPlanner Sequencer
 ===========
 
 This module aims to replace [NetworkPlanner.R](https://github.com/sel-columbia/networkplanner.R), with an object 
