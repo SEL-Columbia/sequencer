@@ -18,4 +18,5 @@ if __name__ == '__main__':
     # Initialize the Sequencer with the NetworkPlan
     mysequencer = DemoSequencer(mynetworkplan)
 
-    print list(mysequencer.sequence())
+    print list(mysequencer.sequence()),  '\n'
+    print mynetworkplan.network_to_dict()

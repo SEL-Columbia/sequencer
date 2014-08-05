@@ -1,6 +1,16 @@
 import pandas as pd
 import networkx as nx
 
+def memoize(f):
+    cache = {} 
+    def memoizedFunction(*args):
+        if args not in cache:
+            cache[args] = f(*args)
+        return cache[args]
+
+    memoizedFunction.cache = cache
+    return memoizedFunction
+
 class Sequencer(object):
     
     def __init__(self, NetworkPlan):
@@ -29,49 +39,31 @@ class Sequencer(object):
             else:
                node['nodal_demand'] = name_match['nodal_demand'].values[0]
 
-    def _graph_to_nested_list(self, obj):
-        """converts a dictionary representation of a network to a list"""
-        if type(obj) is dict:
-            return [obj.keys()] + self._graph_to_nested_list(obj.values())
-        elif type(obj) is list:
-                return [self._graph_to_nested_list(item) for item in obj]
-        else:
-            return [obj]
-        
-    def _flatten_list(self, nested_list):
-        """Flatten an arbitrarily nested list."""
-        while nested_list:
-            sublist = nested_list.pop(0)
-
-            if isinstance(sublist, list):
-                nested_list = sublist + nested_list
-            else:
-                yield sublist
-    
-    def flatten_graph(self, network):
-        return self._flatten_list(self._graph_to_nested_list(network))
-        
     def sequence(self):
-        # Todo: pass accumulate only roots when refactored for recursive call
-        demand = {node: self.accumulate(node) for node in self.networkplan.network.nodes()}
         network = self.networkplan.network_to_dict()
         frontier = network.keys()
         
         while frontier:
             max_ = choice = None
             for node in frontier:
-                if demand[node] > max_:
-                    max_ = demand[node]
+                demand = self.accumulate(node)
+                if demand > max_:
+                    max_ = demand 
                     choice = node
-                    
-            [network.update({item:[]}) if type(item) == int else network.update(item) 
-             for item in network.pop(choice)]
+            
+            for item in network.pop(choice):
+                if type(item) != int:
+                    network.update(item) 
+                else:
+                    network.update({item:[]})
             
             frontier = network.keys()
             yield choice
     
+    @memoize
     def accumulate(self, n):
-        """computes the aggregate downstream demand"""
-        # Todo: make a recursive call to prevent duplicate calculations
-        return sum([self.networkplan.network.node[node]['nodal_demand'] 
-         for node in list(self.flatten_graph(self.networkplan.downstream(n)))]) 
+        """computes the aggregate downstream_demand"""
+        demand = self.networkplan.network.node[n]['nodal_demand']
+        downstream_demand = sum([self.accumulate(child) for child, edge in 
+                            enumerate(self.networkplan.adj_matrix[n, :]) if edge])
+        return demand + downstream_demand if downstream_demand else demand
