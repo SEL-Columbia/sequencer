@@ -62,6 +62,7 @@ class Sequencer(object):
     
     @memoize
     def accumulate(self, n):
+        """computes the aggregate downstream_demand"""
         demand = self.networkplan.network.node[n]['nodal_demand']
         downstream_demand = sum([self.accumulate(child) for child, edge in 
                             enumerate(self.networkplan.adj_matrix[n, :]) if edge])
