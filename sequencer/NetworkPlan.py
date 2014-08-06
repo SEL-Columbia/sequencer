@@ -83,7 +83,6 @@ class NetworkPlan(object):
     
     def _depth_first_directed(self, graph):
         """Transforms a networks edges to direct away from the root""" 
-        # Todo: refactor to csgraph traversal to improve performance
         old_edges = graph.edges()
         dfs_edges = list(nx.traversal.dfs_edges(graph,
                         #Todo: fix to use graph root
