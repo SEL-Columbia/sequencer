@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+__author__ = 'Brandon Ogle'
+
 import pandas as pd
 import networkx as nx
 
@@ -15,31 +18,12 @@ class Sequencer(object):
     
     def __init__(self, NetworkPlan):
         self.networkplan = NetworkPlan
-        self.propagate_demand()
-
-    def nodal_demand(self):
-        raise NotImplemented()
     
-    def propagate_demand(self):
-        # Todo: If we ever hope to have a generic sequencer we need a 
-        # better index to align on, the current implementation is hacky 
-        # and requires hard coded column names making any abstracton obsolete
-
+    def sequence(self):
+        
         # Create a column containing the computed demand
         self.networkplan.metrics['nodal_demand'] = self.nodal_demand(self.networkplan.metrics)
-        # Filtering down the dataframe, to limit duplicates resulting from bad index
-        is_grid = self.networkplan.metrics[self.networkplan.metrics['Metric > System'] == 'grid']
-        for node in self.networkplan.network.nodes():
-            node = self.networkplan.network.node[node]
-            name = node['names']
-            # Filter DataFrame down to results with matching name
-            name_match = is_grid[is_grid['Name'] == name]
-            if name == 'FAKE':
-                node['nodal_demand'] = 0
-            else:
-               node['nodal_demand'] = name_match['nodal_demand'].values[0]
 
-    def sequence(self):
         network = self.networkplan.network_to_dict()
         frontier = network.keys()
         
@@ -63,7 +47,12 @@ class Sequencer(object):
     @memoize
     def accumulate(self, n):
         """computes the aggregate downstream_demand"""
-        demand = self.networkplan.network.node[n]['nodal_demand']
+        demand = self.networkplan.metrics['nodal_demand'].ix[n]
         downstream_demand = sum([self.accumulate(child) for child, edge in 
                             enumerate(self.networkplan.adj_matrix[n, :]) if edge])
         return demand + downstream_demand if downstream_demand else demand
+
+    def nodal_demand(self, df):
+        """Overload this method to compute your nodal demand"""
+        raise NotImplemented()
+
