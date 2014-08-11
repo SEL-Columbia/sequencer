@@ -77,7 +77,7 @@ class NetworkPlan(object):
 
         # If for some reason there is more, its likely due to poor indexes and just pick one
         elif len(fakes) > 1:
-            print Warning('More than one fake node in subgraph, something may have gone horribly in aligning your data!')
+            print Warning('More than one fake node in subgraph, something may have gone horribly wrong in aligning your data!')
             return np.random.choice(fakes)
 
         # If there is no fake node in the subgraph, its not close to infastructure and thus priority is given to MAX(priority metric)

@@ -59,4 +59,5 @@ def prep_data(network, metrics, prec=8):
     network = network.to_undirected()
     network = network.to_directed()
 
-    return network, master
+    return network, master.fillna(0)
+
