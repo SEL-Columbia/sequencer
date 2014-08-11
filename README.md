@@ -155,3 +155,4 @@ nx.draw(nwp.network, nwp.coords)
 nx.draw_networkx_labels(nwp.network, nwp.coords)
 ```
 
+![a link](https://github.com/SEL-Columbia/Sequencer/blob/master/Network.png)
