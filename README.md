@@ -147,11 +147,13 @@ if __name__ == '__main__':
 <p>132 rows × 4 columns</p>
 </div></div></div></div><div class="btn output_collapsed" title="click to expand output" style="display: none;">. . .</div></div>
 
-
+#Heirarchial Representaion
 ```python
 import networkx as nx
 figsize(30, 30)
-nx.draw(nwp.network, nwp.coords)
-nx.draw_networkx_labels(nwp.network, nwp.coords)
+pos = nx.pygraphviz(nwp.network, 'dot')
+nx.draw(nwp.network, pos)
+nx.draw_networkx_labels(nwp.network, pos)
 ```
 
+![a link](https://github.com/SEL-Columbia/Sequencer/blob/master/Network.png)
