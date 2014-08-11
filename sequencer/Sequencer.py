@@ -2,7 +2,6 @@
 __author__ = 'Brandon Ogle'
 
 import pandas as pd
-import networkx as nxi
 from functools import wraps
 
 def memoize(f):
