@@ -146,3 +146,12 @@ if __name__ == '__main__':
 </table>
 <p>132 rows × 4 columns</p>
 </div></div></div></div><div class="btn output_collapsed" title="click to expand output" style="display: none;">. . .</div></div>
+
+
+```python
+import networkx as nx
+figsize(30, 30)
+nx.draw(nwp.network, nwp.coords)
+nx.draw_networkx_labels(nwp.network, nwp.coords)
+```
+
