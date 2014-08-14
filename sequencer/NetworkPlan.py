@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 __author__ = 'Brandon Ogle'
 
+import fiona
 import numpy as np
 import networkx as nx
 from scipy.sparse import csr_matrix
@@ -29,6 +30,7 @@ class NetworkPlan(object):
     def __init__(self, shp, csv, **kwargs):
          
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
+        self._assert_proj_match(shp, csv)
 
         # Load in and align input data
         self._network, self._metrics = prep_data( nx.read_shp(shp),
@@ -46,10 +48,29 @@ class NetworkPlan(object):
     @property
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
-        # TODO: add if projection is utm then use 'euclidean' else 'haversine'
-        metric = DistanceMetric.get_metric('haversine')
+        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
+           
+        metric = DistanceMetric.get_metric(measure)
+        if measure == 'haversine':
+            return metric.pairwise(self.coords.values(), self.coords.values()) * 6378100 #Earth radius in meters
         return metric.pairwise(self.coords.values(), self.coords.values())
-        
+
+    def _assert_proj_match(self, shp, csv):
+        """Ensure that the projections match before continuing"""
+        shapefile = fiona.open(shp)
+        csv_proj = open(csv).readline()
+        csv_proj = csv_proj.split('PROJ.4')[1]
+        pairs = [x.split('=') for x in csv_proj.split(' +') if x != '' and '=' in x]
+        csv_proj = {x[0]:x[1] for x in pairs}
+        for key in csv_proj.keys():
+            if key in csv_proj and key in shapefile.crs:
+                try:
+                    assert(str(csv_proj[key]) == str(shapefile.crs[key]))
+                except:
+                    raise AssertionError('csv and shapefile projections dont match')
+
+        self.proj = shapefile.crs['proj']
+
     def _get_node_attr(self, node, attr):
         """Returns an attribute value from the metrics dataframe"""
         return self.metrics[attr].ix[node]
