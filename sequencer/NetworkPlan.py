@@ -38,14 +38,14 @@ class NetworkPlan(object):
                                                   prec = kwargs['precision'] 
                                                   if 'precision' in kwargs else 8
                                                 )
-        
+
+        self.distance_matrix = self._distance_matrix()
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
         
         # Transform edges to a rooted graph
         self.direct_network()
         
-    @property
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
         measure = 'euclidean' if self.proj == 'utm' else 'haversine'
@@ -109,7 +109,7 @@ class NetworkPlan(object):
         """sets the edge weights in the graph using the distance matrix"""
         weights = {}
         for edge in self.network.edges():
-            weights[edge] = self._distance_matrix[edge]
+            weights[edge] = self.distance_matrix[edge]
         nx.set_edge_attributes(self.network, 'weight', weights)
     
     def direct_network(self):
