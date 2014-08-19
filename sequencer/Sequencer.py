@@ -21,7 +21,7 @@ class Sequencer(object):
         self.networkplan = NetworkPlan
         # Create a column containing the computed demand
         self.networkplan.metrics['nodal_demand'] = self.nodal_demand(self.networkplan.metrics)
-    
+   
     def _sequence(self):
         network = self.networkplan.network_to_dict()
         frontier = network.keys()
@@ -68,7 +68,7 @@ class Sequencer(object):
     def cost(self, n):
         parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
         if parent:
-            return self.networkplan._distance_matrix[parent[0], n]
+            return self.networkplan.distance_matrix[parent[0], n]
         return 1
 
     def nodal_demand(self, df):
