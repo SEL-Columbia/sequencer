@@ -21,6 +21,7 @@ class Sequencer(object):
         self.networkplan = NetworkPlan
         # Create a column containing the computed demand
         self.networkplan.metrics['nodal_demand'] = self.nodal_demand(self.networkplan.metrics)
+        self.root_children = self.networkplan.root_child_dict()
    
     def _sequence(self):
         network = self.networkplan.network_to_dict()
@@ -30,12 +31,15 @@ class Sequencer(object):
             rank += 1
             max_ = choice = None
             for node in frontier:
-                demand = self.accumulate(node)
-                cost = self.cost(node)
+                accum_dict = self.accumulate(node)
+                demand = accum_dict['demand']
+                cost = accum_dict['cost']
+
                 metric = 1.0 * demand / cost
                 if metric > max_:
                     max_ = metric 
                     choice = node
+                    choice_vars = accum_dict
             
             for item in network.pop(choice):
                 if type(item) != int:
@@ -46,30 +50,47 @@ class Sequencer(object):
             frontier = network.keys()
 
             yield {
-                    'rank'                 : rank,
-                    'node'                 : choice,
-                    'demand'               : self.accumulate(choice),
-                    'distance_from_parent' : self.cost(choice),
-                    'metric'               : 1.0 * self.accumulate(choice) / self.cost(choice)
+                    'rank'                                : rank,
+                    'node'                                : choice,
+                    'Sequence..Downstream.demand.sum.kwh' : choice_vars['demand'],
+                    'Sequence..Downstream.distance.sum.m' : choice_vars['cost'],
+                    'Sequence..Root.vertex.id'            : self.root(choice),
+                    'Sequence..Upstream.id'               : self.parent(choice),
+                    'Sequence..Decision.metric'           : 1.0 * choice_vars['demand'] / choice_vars['cost']
                     }
 
     def sequence(self):
         return pd.DataFrame(self._sequence()).set_index('rank')
+
+    def root(self, n):
+        # check the keys to see if the node even has an upstream root
+        if n in self.root_children.keys():
+            return None
+        for root, children in self.root_children.iteritems():
+            if n in children:
+                return root
     
     @memoize
     def accumulate(self, n):
-        """computes the aggregate downstream_demand"""
-        demand = self.networkplan.metrics['nodal_demand'].ix[n]
-        downstream_demand = sum([self.accumulate(child) for child, edge in 
-                            enumerate(self.networkplan.adj_matrix[n, :]) if edge])
-        return demand + downstream_demand
+        """traverses the tree computing downstream aggregates"""
 
-    @memoize
-    def cost(self, n):
+        demand = self.networkplan.metrics['nodal_demand'].ix[n]
+        parent = self.parent(n)
+        cost = self.networkplan.distance_matrix[parent, n] if parent else 1.0
+
+        downstream_vars = [self.accumulate(child) for child, edge in enumerate(self.networkplan.adj_matrix[n, :]) if edge]
+
+        if downstream_vars:
+            agg_downstream = {k:sum(d[k] for d in downstream_vars) for k in downstream_vars[0]}        
+            demand += agg_downstream['demand']
+            cost += agg_downstream['cost']
+
+        return {'demand': demand, 'cost': cost}
+
+    
+    def parent(self, n):
         parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
-        if parent:
-            return self.networkplan.distance_matrix[parent[0], n]
-        return 1
+        return parent[0] if parent else None
 
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""

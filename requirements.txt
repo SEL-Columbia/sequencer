@@ -9,10 +9,11 @@ networkx==1.9
 numexpr==2.3.1                
 numpy==1.8.2                
 pandas==0.14.1               
-pygraphviz==1.2                      
+# pygraphviz==1.2
+# conda install -c https://conda.binstar.org/mhworth pygraphviz                     
 pyparsing==2.0.1                
 python==2.7.8                
-python-dateutil==1.5                  
+#python-dateutil==1.5                  
 pytz==2014.4               
 scikit-learn==0.15.0               
 scipy==0.14.0               
