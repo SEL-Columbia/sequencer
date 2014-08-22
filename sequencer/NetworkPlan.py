@@ -123,6 +123,19 @@ class NetworkPlan(object):
                     enumerate(self.adj_matrix[n, :]) if edge]
         return {n : children} if children else n
 
+    def root_child_dict(self):
+        root_child = {}
+        for subgraph in self.get_subgraphs():
+            nodes_degree = subgraph.in_degree()
+            subgraph = subgraph.node
+            for node, degree in nodes_degree.iteritems():
+                if degree == 0:
+                    break
+            assert(nodes_degree[node] == 0)
+            subgraph.pop(node)
+            root_child[node] = subgraph.keys()                
+        return root_child
+
     def get_subgraphs(self):
         """returns the components from a directed graph"""
         return nx.weakly_connected_component_subgraphs(self.network)
