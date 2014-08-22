@@ -157,3 +157,43 @@ nx.draw_networkx_labels(nwp.network, pos)
 ```
 
 ![a link](https://github.com/SEL-Columbia/Sequencer/blob/master/Network.png)
+
+##Installation 
+
+The Sequencer depends on several modules including the scipy stack, Networkx and some various other libraries.
+The required packages can be found in the requirements.txt, you can install them by hand or take advantage of your 
+package manager. 
+
+##Anaconda
+
+You can easily create a new env with the listed packages by running
+```bash
+conda create -n [your env] -file requirements.txt
+```
+
+If you plan to play with the sequencer interactively and want to output graphics like those above, you will need 
+Pygraphviz. Pygraphviz is not in the default channel for conda and is commented out in the requirements.txt, however 
+it can be pulled from binstar.org and built with 
+
+```bash 
+conda install -c https://conda.binstar.org/mhworth pygraphviz  
+```
+
+##Pip
+
+I dont use pip so I dont know if it will have all packages in requirements.txt, nor do I know if it will grab all 
+their dependencies.
+
+so your mileage will vary attempting 
+```bash
+pip install requirements.txt
+```
+
+##Setup
+
+There are no build tools for the sequencer as of yet, so for dev purposes the easiest way to get up and running is to 
+clone the repo and symlink the sequencer subfolder into your site packages.
+
+```bash
+ln -s Yourpath/Sequencer/sequencer Yourpath/site-packages
+```
