@@ -3,6 +3,9 @@ __author__ = 'Brandon Ogle'
 
 import pandas as pd
 from functools import wraps
+import networkx as nx
+import numpy as np
+import os
 
 def memoize(f):
     cache = {}
@@ -26,9 +29,8 @@ class Sequencer(object):
     def _sequence(self):
         network = self.networkplan.network_to_dict()
         frontier = network.keys()
-        rank = 0 
+        rank = 0  
         while frontier:
-            rank += 1
             max_ = choice = None
             for node in frontier:
                 accum_dict = self.accumulate(node)
@@ -48,21 +50,26 @@ class Sequencer(object):
                     network.update({item:[]})
             
             frontier = network.keys()
+            
+            choice_row =  {
+                            'node'                                : choice,
+                            'Sequence..Downstream.demand.sum.kwh' : choice_vars['demand'],
+                            'Sequence..Downstream.distance.sum.m' : choice_vars['cost'],
+                            'Sequence..Root.vertex.id'            : self.get_root(choice),
+                            'Sequence..Upstream.id'               : self.parent(choice),
+                            'Sequence..Decision.metric'           : 1.0 * choice_vars['demand'] / choice_vars['cost']
+                          }
 
-            yield {
-                    'rank'                                : rank,
-                    'node'                                : choice,
-                    'Sequence..Downstream.demand.sum.kwh' : choice_vars['demand'],
-                    'Sequence..Downstream.distance.sum.m' : choice_vars['cost'],
-                    'Sequence..Root.vertex.id'            : self.root(choice),
-                    'Sequence..Upstream.id'               : self.parent(choice),
-                    'Sequence..Decision.metric'           : 1.0 * choice_vars['demand'] / choice_vars['cost']
-                    }
+            if choice_row['Sequence..Upstream.id'] is not None:
+                rank += 1
+                choice_row['rank'] = rank
+                yield choice_row
 
     def sequence(self):
-        return pd.DataFrame(self._sequence()).set_index('rank')
+        self.results = pd.DataFrame(self._sequence()).set_index('rank')
+        self.rank_edges()
 
-    def root(self, n):
+    def get_root(self, n):
         # check the keys to see if the node even has an upstream root
         if n in self.root_children.keys():
             return None
@@ -87,6 +94,25 @@ class Sequencer(object):
 
         return {'demand': demand, 'cost': cost}
 
+    def output(self, path):
+        self.networkplan.network.node = {}
+        out_metrics = 'sequenced-metrics.csv'
+        out_results = 'sequenced-results.csv'
+        out_shp = 'sequenced-network'
+        nx.write_shp(self.networkplan.network, os.path.join(path, out_shp))
+        self.networkplan.metrics.to_csv(os.path.join(path, out_metrics))
+        self.results.to_csv(os.path.join(path, out_results))
+
+    def rank_edges(self):
+        r = self.results
+        for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['node']):
+            self.networkplan.network.edge[fnode][tnode]['rank'] = rank
+            self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
+            fnode_coords = self.networkplan.coords[fnode]
+            tnode_coords = self.networkplan.coords[tnode]
+
+            self.networkplan.network.edge[fnode][tnode]['Wkt'] = 'LINESTRING ({x1} {y1}, {x2} {y2})'.format(x1=fnode_coords[0], y1=fnode_coords[1],
+                                                                                                            x2=tnode_coords[0], y2=tnode_coords[1])
     
     def parent(self, n):
         parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
