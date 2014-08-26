@@ -68,6 +68,7 @@ class Sequencer(object):
     def sequence(self):
         self.results = pd.DataFrame(self._sequence()).set_index('rank')
         self.rank_edges()
+        return self.results
 
     def get_root(self, n):
         # check the keys to see if the node even has an upstream root
