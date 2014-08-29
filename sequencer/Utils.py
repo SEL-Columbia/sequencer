@@ -6,57 +6,57 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 
-pd.options.mode.chained_assignment = None
+def prep_data(network, metrics):
+    """Preps data"""
 
-def prep_data(network, metrics, prec=8):
-    """Does its best to align your shapefile nodes with your csv"""
-    
-    # Transform node names from coords to ints and save coords as attr
+    loc_tol = 1 # meters at the equator, tolerance is stricter towards the poles
+    earth_rad = 6371000 # average radius (meters)
+    earth_cir = 2*np.pi*earth_rad # cirumference of earth
+    meters_degree = (earth_cir / 360) # meters per degree longitude at the equator
+    float_tol = loc_tol / meters_degree # convert meter tolerance to lat_lon
+
+    # convert the node names from coords to integers, cache the coords as attrs
     network = nx.convert_node_labels_to_integers(network, label_attribute='coords')
-    # Make a DataFrame representation of the node data
-    node_df = pd.DataFrame(network.node).T
-    # Make note of the starting node names
-    node_df['orig_name'] = node_df.index
-    
-    # Zip the metrics x, y column to create a coords column to join on
-    metrics['coords'] = zip(metrics['X'], metrics['Y'])
-    # If lucky this will align all of the data
-    easy_match = pd.merge(node_df, metrics, on='coords', right_index=True)
-    
-    # You probably aren't lucky, so try to get the remaining matches
-    # Any non matches will later be interpreted as `FAKE' nodes
-    
-    # Grab the complement of the easy_matches to search for reamining nodes
-    remaining_universe = metrics.ix[metrics.index - easy_match.index]
-    # Grab the nodes that weren't set in easy_match
-    remaining_nodes = node_df[~node_df['coords'].isin(easy_match['coords'])]
-    
-    # Change precision to force matches
-    remaining_nodes.loc[   :, 'coords'] = remaining_nodes['coords'].map(lambda x: np.around(x, prec))
-    remaining_nodes.loc[   :, 'coords'] = remaining_nodes['coords'].map(tuple)
 
-    remaining_universe.loc[:, 'coords'] = remaining_universe['coords'].map(lambda x: np.around(x, prec))
-    remaining_universe.loc[:, 'coords'] = remaining_universe['coords'].map(tuple)
+    # create a dataframe with the network nodes with int label index, attrs as cols
+    node_df = DataFrame(network.node).T
+
+    # join (x,y) coords to create a 'metrics coords'
+    metrics['m_coords'] = map(tuple, metrics[['X', 'Y']].values)
     
-    # Attempt another match on remaining data
-    hard_match = pd.merge(remaining_nodes, remaining_universe, on='coords', right_index=True)  
-
-    # Join all the matches
-    master = pd.concat([easy_match, hard_match]).drop_duplicates()
+    # cast coords to tuples (hashable)
+    node_df['coords'] = node_df['coords'].apply(tuple)
+    metrics['m_coords'] = metrics['m_coords'].apply(tuple)
     
-    # Anything still without a match?
-    fakes = remaining_nodes[~remaining_nodes['coords'].isin(master['coords'])]
-    master = pd.concat([master, fakes])
+    # build a vector of all the coordinates in the metrics dataframe
+    coords_mat = np.vstack(metrics['m_coords'].values)
 
-    # Reset the node names
-    master = master.set_index('orig_name')
-    master.index.name = 'node'
-    master = master.sort()
+    # eucdist takes a coordinate pair and computes the euclidean distance from all the coords in coords_mat
+    # fuzzy_match takes a coordinate pair and returns the approximate match from the metrics dataframe using float_tol
+    eucdist = lambda coords: np.sqrt(np.sum(np.square(coords_mat - coords), axis=1))
+    fuzzy_match = lambda coords: coords_mat[eucdist(coords) < float_tol**2]
+
+    # map over the coords in the nodal dataframe returning the fuzzy match from metrics
+    node_df['m_coords'] = node_df['coords'].apply(lambda coord: next((x for x in fuzzy_match(coord)), []))
     
-    #TODO: assert network.node ≅ master.ix[:, :'coords'].T.to_dict() 
-
-    # Finally assume the edges are bidirectional with this quick hack
-    network = network.to_undirected()
-    network = network.to_directed()
-
-    return network, master.fillna(0)
+    # cast the coordinates back to tuples (hashable) 
+    node_df['m_coords'] = node_df['m_coords'].apply(tuple)
+    metrics['m_coords'] = metrics['m_coords'].apply(tuple)
+    
+    # now that we have identical metric coords in both node_df and metrics join on that column
+    metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort()
+    
+    # drop the m_coords from both frames
+    metrics.drop(labels=['m_coords'], axis=1, inplace=True)
+    node_df.drop(labels=['m_coords'], axis=1, inplace=True)
+  
+    # anything in node_df that failed to find a fuzzy_match is a 'Fake' node
+    fake_nodes = node_df.ix[node_df.index - metrics.index]
+    
+    # tack the fake nodes on to the metrics (all values are NULL, except coord)
+    metrics = pd.concat([metrics, fake_nodes]).sort()
+    
+    # finally assume Network edges are bi-directional
+    network = network.to_undirected().to_directed()
+    
+    return network, metrics
