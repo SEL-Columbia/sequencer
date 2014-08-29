@@ -28,15 +28,13 @@ class NetworkPlan(object):
     """
     
     def __init__(self, shp, csv, **kwargs):
-         
+        self.shp_p, self.csv_p = shp, csv
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
         self._assert_proj_match(shp, csv)
 
         # Load in and align input data
         self._network, self._metrics = prep_data( nx.read_shp(shp),
-                                                  pd.read_csv(csv, header=1), 
-                                                  prec = kwargs['precision'] 
-                                                  if 'precision' in kwargs else 8
+                                                  pd.read_csv(csv, header=1) 
                                                 )
 
         self.distance_matrix = self._distance_matrix()
@@ -45,6 +43,8 @@ class NetworkPlan(object):
         
         # Transform edges to a rooted graph
         self.direct_network()
+        #fill NAN with zeros
+        self._metrics = self.metrics.fillna(0)
         
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
@@ -90,15 +90,15 @@ class NetworkPlan(object):
         # get a view of the DataFrame without positional columns
         non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords']].ix[nodes]
         # find rows that are all null, these are the nodes representing the connection to existing infastructure
-        fakes = non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index
+        fakes = non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
         
         # There theoretically should only be one fake per subgraph
         if len(fakes) == 1:
-            return fakes
+            return fakes[0]
 
         # If for some reason there is more, its likely due to poor indexes and just pick one
         elif len(fakes) > 1:
-            print Warning('More than one fake node in subgraph, something may have gone horribly in aligning your data!')
+            print Warning('More than one fake node in subgraph, something may have gone horribly in aligning your data! {}'.format(fakes))
             return np.random.choice(fakes)
 
         # If there is no fake node in the subgraph, its not close to infastructure and thus priority is given to MAX(priority metric)

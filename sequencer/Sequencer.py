@@ -96,7 +96,10 @@ class Sequencer(object):
         return {'demand': demand, 'cost': cost}
 
     def output(self, path):
-        self.networkplan.network.node = {}
+        
+        for node in self.networkplan.network.nodes():
+            self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
+                                                                                  y=self.networkplan.coords[node][0])
         out_metrics = 'sequenced-metrics.csv'
         out_results = 'sequenced-results.csv'
         out_shp = 'sequenced-network'
