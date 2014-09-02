@@ -8,8 +8,21 @@ from scipy.sparse import csr_matrix
 import scipy.sparse.csgraph as graph
 from sklearn.neighbors import DistanceMetric
 import pandas as pd
+import logging
 
 from sequencer.Utils import prep_data
+
+
+
+logger = logging.getLogger('NetworkPlan')
+logger.setLevel(logging.INFO)
+    
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 
 class NetworkPlan(object):
     """
@@ -30,17 +43,22 @@ class NetworkPlan(object):
     def __init__(self, shp, csv, **kwargs):
         self.shp_p, self.csv_p = shp, csv
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
+
+        logger.info('Asserting Input Projections Match')
         self._assert_proj_match(shp, csv)
 
         # Load in and align input data
+        logger.info('Aligning Network Nodes With Input Metrics')
         self._network, self._metrics = prep_data( nx.read_shp(shp),
                                                   pd.read_csv(csv, header=1) 
                                                 )
 
+        logger.info('Computing Pairwise Distances')
         self.distance_matrix = self._distance_matrix()
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
         
+        logger.info('Directing Network Away From Roots')
         # Transform edges to a rooted graph
         self.direct_network()
         #fill NAN with zeros
@@ -49,7 +67,7 @@ class NetworkPlan(object):
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
         measure = 'euclidean' if self.proj == 'utm' else 'haversine'
-           
+        logger.info('Using {} Distance'.format(measure))
         metric = DistanceMetric.get_metric(measure)
         if measure == 'haversine':
             return metric.pairwise(self.coords.values(), self.coords.values()) * 6378100 #Earth radius in meters
@@ -67,7 +85,8 @@ class NetworkPlan(object):
                 try:
                     assert(str(csv_proj[key]) == str(shapefile.crs[key]))
                 except:
-                    raise AssertionError('csv and shapefile projections dont match')
+                    logger.error("csv and shp Projections Don't Match")
+                    raise AssertionError("csv and shapefile Projections Don't Match")
 
         self.proj = shapefile.crs['proj']
 
@@ -76,12 +95,20 @@ class NetworkPlan(object):
         return self.metrics[attr].ix[node]
        
     def _depth_first_directed(self, graph):
-        """Transforms a networks edges to direct away from the root""" 
+        """Transforms a networks edges to direct away from the root"""
+
+        sub = next((i+1 for i, g in enumerate(self.get_subgraphs()) if g==graph), None)
+        logger.info('Solving SUBGRAPH {} / {}'.format(sub, len(list(self.get_subgraphs()))))
+
         old_edges = graph.edges()
         dfs_edges = list(nx.traversal.dfs_edges(graph,
                         self._graph_priority(graph.nodes())))
+        #This debug message could be cleaner
+        logger.debug('mapping {} -> {}'.format(old_edges, dfs_edges))
         graph.remove_edges_from(old_edges)
         graph.add_edges_from(dfs_edges)
+        
+        logger.info('DONE!')
         return graph
     
     def _graph_priority(self, nodes):
@@ -98,7 +125,7 @@ class NetworkPlan(object):
 
         # If for some reason there is more, its likely due to poor indexes and just pick one
         elif len(fakes) > 1:
-            print Warning('More than one fake node in subgraph, something may have gone horribly in aligning your data! {}'.format(fakes))
+            logger.warn('More Than One Fake Node In Subgraph {}, Something May Have Gone Horribly Wrong in Aligning Your Data!'.format(fakes))
             return np.random.choice(fakes)
 
         # If there is no fake node in the subgraph, its not close to infastructure and thus priority is given to MAX(priority metric)
@@ -114,6 +141,7 @@ class NetworkPlan(object):
     
     def direct_network(self):
         """Decomposes a full graph into its components and directs them away from their roots"""
+        #print list(self.get_subgraphs())
         graphs = [self._depth_first_directed(g) for g in self.get_subgraphs()]
         self._network = reduce(lambda a, b: nx.union(a, b), graphs)
         
@@ -133,13 +161,19 @@ class NetworkPlan(object):
                     break
             assert(nodes_degree[node] == 0)
             subgraph.pop(node)
-            root_child[node] = subgraph.keys()                
+            root_child[node] = subgraph.keys()
         return root_child
+
+    def _get_subgraphs(self):
+        self.subgraphs = list(nx.weakly_connected_component_subgraphs(self.network))
 
     def get_subgraphs(self):
         """returns the components from a directed graph"""
-        return nx.weakly_connected_component_subgraphs(self.network)
-    
+        if hasattr(self, 'subgraphs') is False:
+            self._get_subgraphs()
+        for sub in self.subgraphs:
+            yield sub
+
     def network_to_dict(self):
         """returns a dictionary representation of the full graph"""
         return reduce(lambda x,y: x.update(y) or x, 
@@ -189,6 +223,8 @@ def download_scenario(scenario_number, directory_name=None, username=None, passw
 
     # If the scenario is public, yet there is a credential raise exception
     if not private and any([username is not None, password is not None]):
+        logger.warn("Private scenario requires both username and password!" +
+                        "Authentication for public scenarios can be omitted.")
         raise Exception("Private scenario requires both username and password!" +
                         "Authentication for public scenarios can be omitted.")
 

@@ -6,13 +6,32 @@ from functools import wraps
 import networkx as nx
 import numpy as np
 import os
+import sys
+import logging
+
+logger = logging.getLogger('Sequencer  ')
+logger.setLevel(logging.INFO)
+    
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 def memoize(f):
     cache = {}
+    class scope:
+        last_prog = None
+        
     @wraps(f)
     def memoizedFunction(*args):
         if args not in cache:
             cache[args] = f(*args)
+            if len(cache.keys()) != scope.last_prog:
+                scope.last_prog = len(cache.keys())
+                if args[0]._progress_meter(scope.last_prog) == 1:
+                    sys.stdout.write('\n')
+            
         return cache[args]
 
     memoizedFunction.cache = cache
@@ -25,24 +44,27 @@ class Sequencer(object):
         # Create a column containing the computed demand
         self.networkplan.metrics['nodal_demand'] = self.nodal_demand(self.networkplan.metrics)
         self.root_children = self.networkplan.root_child_dict()
-   
+
     def _sequence(self):
+        logger.info('Converting The Network to a HashMap (Warning: this is time consuming for large Networks)')
         network = self.networkplan.network_to_dict()
         frontier = network.keys()
         rank = 0  
-        while frontier:
+        logger.info('Traversing The Input Network and Computing Decision Frontier')
+        sys.stdout.flush()
+        while frontier: 
             max_ = choice = None
             for node in frontier:
                 accum_dict = self.accumulate(node)
                 demand = accum_dict['demand']
                 cost = accum_dict['cost']
-
+                
                 metric = 1.0 * demand / cost
                 if metric > max_:
                     max_ = metric 
                     choice = node
-                    choice_vars = accum_dict
-            
+                    choice_vars = accum_dict                    
+
             for item in network.pop(choice):
                 if type(item) != int:
                     network.update(item) 
@@ -63,11 +85,19 @@ class Sequencer(object):
             if choice_row['Sequence..Upstream.id'] is not None:
                 rank += 1
                 choice_row['rank'] = rank
+                logger.debug('rank {} : node {} :: demand {} -> distance {} -> metric {}'.format(rank, choice,
+                                                                                                 choice_vars['demand'], choice_vars['cost'],
+                                                                                                 choice_vars['demand'] / choice_vars['cost']))
                 yield choice_row
-
+            
     def sequence(self):
         self.results = pd.DataFrame(self._sequence()).set_index('rank')
-        self.rank_edges()
+        
+        # post process for output
+        self._build_node_wkt()
+        self._rank_edges()
+        self._clean_results()
+
         return self.results
 
     def get_root(self, n):
@@ -81,7 +111,7 @@ class Sequencer(object):
     @memoize
     def accumulate(self, n):
         """traverses the tree computing downstream aggregates"""
-
+        
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
         parent = self.parent(n)
         cost = self.networkplan.distance_matrix[parent, n] if parent else 1.0
@@ -96,18 +126,25 @@ class Sequencer(object):
         return {'demand': demand, 'cost': cost}
 
     def output(self, path):
-        
-        for node in self.networkplan.network.nodes():
-            self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
-                                                                                  y=self.networkplan.coords[node][0])
+
         out_metrics = 'sequenced-metrics.csv'
         out_results = 'sequenced-results.csv'
         out_shp = 'sequenced-network'
+
         nx.write_shp(self.networkplan.network, os.path.join(path, out_shp))
         self.networkplan.metrics.to_csv(os.path.join(path, out_metrics))
         self.results.to_csv(os.path.join(path, out_results))
 
-    def rank_edges(self):
+    def _clean_results(self):
+        """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
+        #pd.merge
+        pass
+
+    def _build_node_wkt(self):
+        for node in self.networkplan.network.nodes():
+            self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
+                                                                                  y=self.networkplan.coords[node][0])
+    def _rank_edges(self):
         r = self.results
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['node']):
             self.networkplan.network.edge[fnode][tnode]['rank'] = rank
@@ -121,6 +158,23 @@ class Sequencer(object):
     def parent(self, n):
         parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
         return parent[0] if parent else None
+
+    def _progress_meter(self, progress):
+        #clear the line
+        sys.stdout.write('\r')
+        
+        # divide the sequence progress by the number of nodes in the network minus the fakes
+        completed = 1.0 * progress / len(self.networkplan.network.nodes())
+
+        meter_ticks = completed * 100
+        before = ''.join('#' if int(meter_ticks) >  x else ' ' for x in np.arange( 0.0,  50, 2.5))
+        after  = ''.join('#' if int(meter_ticks) >= x else ' ' for x in np.arange(52.5, 100, 2.5))
+        sys.stdout.write('[{b} {prog:.2f}% {a}]'.format(b    = before, 
+                                               	       prog = np.around(meter_ticks, 2), 
+                                              	       a    = after))
+        sys.stdout.flush()
+        
+        return completed
 
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""
