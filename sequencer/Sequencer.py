@@ -176,6 +176,7 @@ class Sequencer(object):
     
     def _clean_results(self):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
+        logger.info('Joining Sequencer Results on Input Metrics')
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         non_xy_cols = orig.columns - ['coords', 'X', 'Y']
         self.networkplan.metrics.index.name = 'node'
@@ -187,7 +188,7 @@ class Sequencer(object):
         joined = pd.concat([sequenced_metrics, orig.ix[list(zip(*rec_index)[0])]])
         joined['coords'] = joined.apply(lambda df: (df['X'], df['Y']), axis=1)
         self.output_frame = joined
-
+        logger.info('DONE!')
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""
         raise NotImplemented()
