@@ -95,10 +95,10 @@ class Sequencer(object):
         
         # post process for output
         self._build_node_wkt()
-        self._rank_edges()
+        self._build_edge_wkt()
         self._clean_results()
-
-        return self.results
+    
+        return self.output_frame
 
     def get_root(self, n):
         # check the keys to see if the node even has an upstream root
@@ -127,24 +127,22 @@ class Sequencer(object):
 
     def output(self, path):
 
-        out_metrics = 'sequenced-metrics.csv'
         out_results = 'sequenced-results.csv'
         out_shp = 'sequenced-network'
 
         nx.write_shp(self.networkplan.network, os.path.join(path, out_shp))
-        self.networkplan.metrics.to_csv(os.path.join(path, out_metrics))
-        self.results.to_csv(os.path.join(path, out_results))
+        self.output_frame.to_csv(os.path.join(path, out_results), index=False, na_rep='NaN')
+        
+        #trash the node shp files
+        [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
+                for x in os.listdir(os.path.join(path, out_shp)) if 'node' in x]
 
-    def _clean_results(self):
-        """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
-        #pd.merge
-        pass
 
     def _build_node_wkt(self):
         for node in self.networkplan.network.nodes():
             self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
                                                                                   y=self.networkplan.coords[node][0])
-    def _rank_edges(self):
+    def _build_edge_wkt(self):
         r = self.results
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['node']):
             self.networkplan.network.edge[fnode][tnode]['rank'] = rank
@@ -170,12 +168,27 @@ class Sequencer(object):
         before = ''.join('#' if int(meter_ticks) >  x else ' ' for x in np.arange( 0.0,  50, 2.5))
         after  = ''.join('#' if int(meter_ticks) >= x else ' ' for x in np.arange(52.5, 100, 2.5))
         sys.stdout.write('[{b} {prog:.2f}% {a}]'.format(b    = before, 
-                                               	       prog = np.around(meter_ticks, 2), 
-                                              	       a    = after))
+                                               	        prog = np.around(meter_ticks, 2), 
+                                              	        a    = after))
         sys.stdout.flush()
         
         return completed
-
+    
+    def _clean_results(self):
+        """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
+        logger.info('Joining Sequencer Results on Input Metrics')
+        orig = pd.read_csv(self.networkplan.csv_p, header=1)
+        non_xy_cols = orig.columns - ['coords', 'X', 'Y']
+        self.networkplan.metrics.index.name = 'node'
+        sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='node')
+        tup_cond = lambda tup: (pd.isnull(orig[tup[0]])) if type(tup[1]) is not str and np.isnan(tup[1]) \
+                                                         else (sequenced_metrics[tup[0]] == tup[1])
+        index = lambda row: list(sequenced_metrics[reduce(lambda x, y: x & y, map(tup_cond, row.iteritems()))].index.values)
+        rec_index = [index(row) for row in zip(*orig[non_xy_cols].T.iteritems())[1] if index(row)]
+        joined = pd.concat([sequenced_metrics, orig.ix[list(zip(*rec_index)[0])]])
+        joined['coords'] = joined.apply(lambda df: (df['X'], df['Y']), axis=1)
+        self.output_frame = joined
+        logger.info('DONE!')
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""
         raise NotImplemented()

@@ -70,7 +70,7 @@ class NetworkPlan(object):
         logger.info('Using {} Distance'.format(measure))
         metric = DistanceMetric.get_metric(measure)
         if measure == 'haversine':
-            return metric.pairwise(self.coords.values(), self.coords.values()) * 6378100 #Earth radius in meters
+            return metric.pairwise(self.coords.values(), self.coords.values()) * 6371010 #Network Planner Earth radius
         return metric.pairwise(self.coords.values(), self.coords.values())
 
     def _assert_proj_match(self, shp, csv):
