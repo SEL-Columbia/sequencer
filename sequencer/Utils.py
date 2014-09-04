@@ -5,9 +5,14 @@ from pandas import DataFrame
 import pandas as pd
 import networkx as nx
 import numpy as np
+from numpy import sin, cos, pi, arcsin, sqrt
+
 
 def prep_data(network, metrics):
-    """Preps data"""
+    """
+    This block of code performs fuzzy matching to align the floating point coordinates
+    from the network shapefile with the input metrics, the drops non matching records
+    """
 
     loc_tol = 1 # meters at the equator, tolerance is stricter towards the poles
     earth_rad = 6371000 # average radius (meters)
@@ -60,4 +65,24 @@ def prep_data(network, metrics):
     network = network.to_undirected().to_directed()
     
     return network, metrics
-        
+    
+def get_hav_distance(lat, lon, pcode_lat, pcode_lon):
+    """
+    Find the distance between a vector of (lat,lon) and the reference point (pcode_lat,pcode_lon).
+    """
+    rad_factor = pi / 180.0  # degrees to radians for trig functions
+    lat_in_rad = lat * rad_factor
+    lon_in_rad = lon * rad_factor
+    pcode_lat_in_rad = pcode_lat * rad_factor
+    pcode_lon_in_rad = pcode_lon * rad_factor
+    delta_lon = lon_in_rad - pcode_lon_in_rad
+    delta_lat = lat_in_rad - pcode_lat_in_rad
+    # Next two lines is the Haversine formula
+    inverse_angle = (np.sin(delta_lat / 2) ** 2 + np.cos(pcode_lat_in_rad) *
+                     np.cos(lat_in_rad) * np.sin(delta_lon / 2) ** 2)
+    haversine_angle = 2 * np.arcsin(np.sqrt(inverse_angle))
+    earth_radius =  6371010 # meters
+    return haversine_angle * earth_radius
+
+def get_euclidean_dist(point, coords):
+    return np.sqrt(np.sum((coords - point) ** 2, axis=1))

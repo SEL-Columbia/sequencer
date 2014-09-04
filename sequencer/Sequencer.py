@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 
+
 logger = logging.getLogger('Sequencer  ')
 logger.setLevel(logging.INFO)
     
@@ -20,6 +21,9 @@ logger.addHandler(ch)
 
 def memoize(f):
     cache = {}
+    
+    # Provides access to this closures scope
+    # In Python 3 this could be replaced with the nonlocal keyword
     class scope:
         last_prog = None
         
@@ -27,14 +31,20 @@ def memoize(f):
     def memoizedFunction(*args):
         if args not in cache:
             cache[args] = f(*args)
+
+            # Get the number of keys in the the cache and send to the progress meter
             if len(cache.keys()) != scope.last_prog:
                 scope.last_prog = len(cache.keys())
                 if args[0]._progress_meter(scope.last_prog) == 1:
+                    # If the progress meter is already shown to be complete
+                    # Go to next line in console                
                     sys.stdout.write('\n')
             
         return cache[args]
 
+    # Assigns a cache to the decorated func
     memoizedFunction.cache = cache
+
     return memoizedFunction
 
 class Sequencer(object):
@@ -47,42 +57,59 @@ class Sequencer(object):
 
     def _sequence(self):
         logger.info('Converting The Network to a HashMap (Warning: this is time consuming for large Networks)')
+        # Convert the Network to a dict
         network = self.networkplan.network_to_dict()
+        # The roots of the Network dict are the seed for the frontier
         frontier = network.keys()
+        # Initialize a staeting rank
         rank = 0  
+
         logger.info('Traversing The Input Network and Computing Decision Frontier')
-        sys.stdout.flush()
+        
+        # While there exists nodes in the keys of the Network dict, continue to Sequence
         while frontier: 
+            # Reset the max_ and choice nodes for the give state of the frontier
             max_ = choice = None
+            # Iterate through the nodes in the frontier to find the max metric
             for node in frontier:
+                # Get the accumulated values for the give node
+                # The traversal is performed only in the first call due to Memoization
                 accum_dict = self.accumulate(node)
                 demand = accum_dict['demand']
                 cost = accum_dict['cost']
-                
+                # Compute the metric
                 metric = 1.0 * demand / cost
+
                 if metric > max_:
+                    # Update the metric and potential candidate
                     max_ = metric 
                     choice = node
                     choice_vars = accum_dict                    
-
+            
+            # Remove the candidate from the Network and shift its downstream neighbors to the keys
             for item in network.pop(choice):
                 if type(item) != int:
                     network.update(item) 
                 else:
                     network.update({item:[]})
-            
+
+            # Update the frontier
             frontier = network.keys()
             
+            # Build a row to be appended to the results dataframe
             choice_row =  {
-                            'node'                                : choice,
-                            'Sequence..Downstream.demand.sum.kwh' : choice_vars['demand'],
-                            'Sequence..Downstream.distance.sum.m' : choice_vars['cost'],
-                            'Sequence..Root.vertex.id'            : self.get_root(choice),
-                            'Sequence..Upstream.id'               : self.parent(choice),
-                            'Sequence..Decision.metric'           : 1.0 * choice_vars['demand'] / choice_vars['cost']
+                            'node'                                  : choice,
+                            'Sequence..Downstream.demand.sum.kwh'   : choice_vars['demand'],
+                            'Sequence..Downstream.distance.sum.m'   : choice_vars['cost'],
+                            'Sequence..Root.vertex.id'              : self.get_root(choice),
+                            'Sequence..Upstream.id'                 : self.parent(choice),
+                            'Sequence..Upstream.segment.distance.m' : self.networkplan.distance_matrix[self.parent(choice), choice],
+                            'Sequence..Decision.metric'             : 1.0 * choice_vars['demand'] / choice_vars['cost']
                           }
-
+            
+            # Only yield the row if it is not a fake node
             if choice_row['Sequence..Upstream.id'] is not None:
+                # Update the rank
                 rank += 1
                 choice_row['rank'] = rank
                 logger.debug('rank {} : node {} :: demand {} -> distance {} -> metric {}'.format(rank, choice,
@@ -93,7 +120,7 @@ class Sequencer(object):
     def sequence(self):
         self.results = pd.DataFrame(self._sequence()).set_index('rank')
         
-        # post process for output
+        # Post process for output
         self._build_node_wkt()
         self._build_edge_wkt()
         self._clean_results()
@@ -101,72 +128,89 @@ class Sequencer(object):
         return self.output_frame
 
     def get_root(self, n):
-        # check the keys to see if the node even has an upstream root
+        # Check the keys to see if the node even has an upstream root
         if n in self.root_children.keys():
             return None
+        # If the node isn't a root, then iterate through the each root until we find the node
         for root, children in self.root_children.iteritems():
             if n in children:
+                # Return the root the node belongs to
                 return root
     
     @memoize
     def accumulate(self, n):
         """traverses the tree computing downstream aggregates"""
-        
+        # Compute individual node variables
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
         parent = self.parent(n)
         cost = self.networkplan.distance_matrix[parent, n] if parent else 1.0
-
+        
+        # Compute the above variables for all child nodes
         downstream_vars = [self.accumulate(child) for child, edge in enumerate(self.networkplan.adj_matrix[n, :]) if edge]
-
+        
         if downstream_vars:
-            agg_downstream = {k:sum(d[k] for d in downstream_vars) for k in downstream_vars[0]}        
+            # Aggreagte all the variables that were found downstream
+            agg_downstream = {k:sum(d[k] for d in downstream_vars) for k in downstream_vars[0]}  
+            # Pull out the aggregated values
             demand += agg_downstream['demand']
             cost += agg_downstream['cost']
 
+        # Return a dictionary of accumulated values
         return {'demand': demand, 'cost': cost}
 
     def output(self, path):
 
         out_results = 'sequenced-results.csv'
         out_shp = 'sequenced-network'
-
+        
+        # Write the shapefiles to path
         nx.write_shp(self.networkplan.network, os.path.join(path, out_shp))
+        # Write the csv to path
         self.output_frame.to_csv(os.path.join(path, out_results), index=False, na_rep='NaN')
         
-        #trash the node shp files
+        # Trash the node shp files
         [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
                 for x in os.listdir(os.path.join(path, out_shp)) if 'node' in x]
 
 
     def _build_node_wkt(self):
         for node in self.networkplan.network.nodes():
+            # Build Node WKT with Point coords
             self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
                                                                                   y=self.networkplan.coords[node][0])
     def _build_edge_wkt(self):
         r = self.results
+        # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['node']):
+            # Set the edge attributes with those found in sequencing
             self.networkplan.network.edge[fnode][tnode]['rank'] = rank
             self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
             fnode_coords = self.networkplan.coords[fnode]
             tnode_coords = self.networkplan.coords[tnode]
-
+            
+            # Build WKT Linestring with from_node and to_node coords
             self.networkplan.network.edge[fnode][tnode]['Wkt'] = 'LINESTRING ({x1} {y1}, {x2} {y2})'.format(x1=fnode_coords[0], y1=fnode_coords[1],
                                                                                                             x2=tnode_coords[0], y2=tnode_coords[1])
     
     def parent(self, n):
         parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
+        # Fake nodes will have no parent
         return parent[0] if parent else None
 
     def _progress_meter(self, progress):
-        #clear the line
+        # Clear the line
         sys.stdout.write('\r')
         
-        # divide the sequence progress by the number of nodes in the network minus the fakes
+        # Divide the sequence progress by the number of nodes in the network minus the fakes
         completed = 1.0 * progress / len(self.networkplan.network.nodes())
 
         meter_ticks = completed * 100
-        before = ''.join('#' if int(meter_ticks) >  x else ' ' for x in np.arange( 0.0,  50, 2.5))
-        after  = ''.join('#' if int(meter_ticks) >= x else ' ' for x in np.arange(52.5, 100, 2.5))
+        # At every 2.5% completion update the progress bar
+        # If the percentage is less than 50% update the ticks before the percentage 
+        before = ''.join('##' if int(meter_ticks) >  x else '  ' for x in np.arange(02.5,  50, 2.5))
+        # If the percentage is greater than 50% update the ticks after the percentage 
+        after  = ''.join('##' if int(meter_ticks) >= x else '  ' for x in np.arange(52.5, 100, 2.5))
+        # Update the progress bar
         sys.stdout.write('[{b} {prog:.2f}% {a}]'.format(b    = before, 
                                                	        prog = np.around(meter_ticks, 2), 
                                               	        a    = after))
@@ -176,7 +220,11 @@ class Sequencer(object):
     
     def _clean_results(self):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
+        
         logger.info('Joining Sequencer Results on Input Metrics')
+        
+        #ToDo: This is INSANELY expensive, need to work on an alternative routine
+        
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         non_xy_cols = orig.columns - ['coords', 'X', 'Y']
         self.networkplan.metrics.index.name = 'node'
@@ -187,8 +235,13 @@ class Sequencer(object):
         rec_index = [index(row) for row in zip(*orig[non_xy_cols].T.iteritems())[1] if index(row)]
         joined = pd.concat([sequenced_metrics, orig.ix[list(zip(*rec_index)[0])]])
         joined['coords'] = joined.apply(lambda df: (df['X'], df['Y']), axis=1)
+        
         self.output_frame = joined
         logger.info('DONE!')
+        
+        sorted_columns = orig.columns.tolist() + list(set(sequenced_metrics.columns) - set(orig.columns))
+        self.output_frame = joined[sorted_columns]
+
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""
         raise NotImplemented()

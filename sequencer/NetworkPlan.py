@@ -6,12 +6,10 @@ import numpy as np
 import networkx as nx
 from scipy.sparse import csr_matrix
 import scipy.sparse.csgraph as graph
-from sklearn.neighbors import DistanceMetric
 import pandas as pd
 import logging
 
-from sequencer.Utils import prep_data
-
+from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
 
 
 logger = logging.getLogger('NetworkPlan')
@@ -66,20 +64,39 @@ class NetworkPlan(object):
         
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
-        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
-        logger.info('Using {} Distance'.format(measure))
-        metric = DistanceMetric.get_metric(measure)
-        if measure == 'haversine':
-            return metric.pairwise(self.coords.values(), self.coords.values()) * 6371010 #Network Planner Earth radius
-        return metric.pairwise(self.coords.values(), self.coords.values())
 
+        # Determine the type of distance measure based on the input projections
+        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
+        # Log the type of metric being used in Sequencing
+        logger.info('Using {} Distance'.format(measure))
+
+        # Convert the nodal coordinate tuples to a np.array
+        coords = np.vstack(map(np.array, self.coords.values()))
+        
+        if measure == 'haversine':
+            # Partially applied haversine function that takes a coord and computes the vector distances for all coords
+            haversine = lambda coord: get_hav_distance(coords[:, 0], coords[:, 1], *coord) 
+            # Map the partially applied function over all coordinates, and stack to a matrix
+            return np.vstack(map(haversine, coords))
+
+        # Partially applied haversine function that takes a coord and computes the vector distances for all coords
+        euclidean = lambda coord: get_euclidean_dist(coords, coord)
+        # Map the partially applied function over all coordinates, and stack to a matrix
+        return np.vstack(map(euclidean, coords))
+    
+    
     def _assert_proj_match(self, shp, csv):
         """Ensure that the projections match before continuing"""
+        # Use fiona to open the shapefile as this includes the projection type
         shapefile = fiona.open(shp)
+        # read the first line of the csv to get the projection
         csv_proj = open(csv).readline()
+
+        # Parse the Projection to a dictionary
         csv_proj = csv_proj.split('PROJ.4')[1]
         pairs = [x.split('=') for x in csv_proj.split(' +') if x != '' and '=' in x]
         csv_proj = {x[0]:x[1] for x in pairs}
+        # Iterate through and ensure all values match in both projection dicts
         for key in csv_proj.keys():
             if key in csv_proj and key in shapefile.crs:
                 try:
@@ -88,6 +105,7 @@ class NetworkPlan(object):
                     logger.error("csv and shp Projections Don't Match")
                     raise AssertionError("csv and shapefile Projections Don't Match")
 
+        # Save the state of the projection
         self.proj = shapefile.crs['proj']
 
     def _get_node_attr(self, node, attr):
@@ -96,8 +114,10 @@ class NetworkPlan(object):
        
     def _depth_first_directed(self, graph):
         """Transforms a networks edges to direct away from the root"""
-
+        
+        # Figure out which subgraph this is
         sub = next((i+1 for i, g in enumerate(self.get_subgraphs()) if g==graph), None)
+        # Log the Subgraph progress
         logger.info('Solving SUBGRAPH {} / {}'.format(sub, len(list(self.get_subgraphs()))))
 
         old_edges = graph.edges()
@@ -125,7 +145,8 @@ class NetworkPlan(object):
 
         # If for some reason there is more, its likely due to poor indexes and just pick one
         elif len(fakes) > 1:
-            logger.warn('More Than One Fake Node In Subgraph {}, Something May Have Gone Horribly Wrong in Aligning Your Data!'.format(fakes))
+            logger.warn('More Than One Fake Node In Subgraph {}, \
+                         Something May Have Gone Horribly Wrong in Aligning Your Data!'.format(fakes))
             return np.random.choice(fakes)
 
         # If there is no fake node in the subgraph, its not close to infastructure and thus priority is given to MAX(priority metric)
