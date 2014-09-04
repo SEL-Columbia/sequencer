@@ -98,7 +98,7 @@ class Sequencer(object):
             
             # Build a row to be appended to the results dataframe
             choice_row =  {
-                            'node'                                  : choice,
+                            'Sequence..Vertex.id'                   : choice,
                             'Sequence..Downstream.demand.sum.kwh'   : choice_vars['demand'],
                             'Sequence..Downstream.distance.sum.m'   : choice_vars['cost'],
                             'Sequence..Root.vertex.id'              : self.get_root(choice),
@@ -111,14 +111,14 @@ class Sequencer(object):
             if choice_row['Sequence..Upstream.id'] is not None:
                 # Update the rank
                 rank += 1
-                choice_row['rank'] = rank
+                choice_row['Sequence..Far.sighted.sequence'] = rank
                 logger.debug('rank {} : node {} :: demand {} -> distance {} -> metric {}'.format(rank, choice,
                                                                                                  choice_vars['demand'], choice_vars['cost'],
                                                                                                  choice_vars['demand'] / choice_vars['cost']))
                 yield choice_row
             
     def sequence(self):
-        self.results = pd.DataFrame(self._sequence()).set_index('rank')
+        self.results = pd.DataFrame(self._sequence()).set_index('Sequence..Far.sighted.sequence')
         
         # Post process for output
         self._build_node_wkt()
@@ -181,7 +181,7 @@ class Sequencer(object):
     def _build_edge_wkt(self):
         r = self.results
         # Iterate through the nodes and their parent
-        for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['node']):
+        for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
             # Set the edge attributes with those found in sequencing
             self.networkplan.network.edge[fnode][tnode]['rank'] = rank
             self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
@@ -227,8 +227,8 @@ class Sequencer(object):
         
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         non_xy_cols = orig.columns - ['coords', 'X', 'Y']
-        self.networkplan.metrics.index.name = 'node'
-        sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='node')
+        self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
+        sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
         tup_cond = lambda tup: (pd.isnull(orig[tup[0]])) if type(tup[1]) is not str and np.isnan(tup[1]) \
                                                          else (sequenced_metrics[tup[0]] == tup[1])
         index = lambda row: list(sequenced_metrics[reduce(lambda x, y: x & y, map(tup_cond, row.iteritems()))].index.values)
