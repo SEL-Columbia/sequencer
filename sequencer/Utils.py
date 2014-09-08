@@ -6,7 +6,7 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from numpy import sin, cos, pi, arcsin, sqrt
-
+import string
 
 def prep_data(network, metrics):
     """
@@ -22,6 +22,9 @@ def prep_data(network, metrics):
 
     # convert the node names from coords to integers, cache the coords as attrs
     network = nx.convert_node_labels_to_integers(network, label_attribute='coords')
+    
+    # convert special characters to dot notation 
+    metrics.columns = parse_cols(metrics)
 
     # create a dataframe with the network nodes with int label index, attrs as cols
     node_df = DataFrame(network.node).T
@@ -86,3 +89,11 @@ def get_hav_distance(lat, lon, pcode_lat, pcode_lon):
 
 def get_euclidean_dist(point, coords):
     return np.sqrt(np.sum((coords - point) ** 2, axis=1))
+
+def parse_cols(df):
+    columns = df.columns
+    strip_chars = lambda x: '.' if x not in list(string.letters) + map(str, range(10)) else x 
+    columns = [''.join(map(strip_chars, col)) for col in columns]
+    return columns
+
+

@@ -8,7 +8,7 @@ import numpy as np
 import os
 import sys
 import logging
-
+from sequencer.Utils import parse_cols
 
 logger = logging.getLogger('Sequencer  ')
 logger.setLevel(logging.INFO)
@@ -185,6 +185,7 @@ class Sequencer(object):
             # Set the edge attributes with those found in sequencing
             self.networkplan.network.edge[fnode][tnode]['rank'] = rank
             self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
+            self.networkplan.network.edge[fnode][tnode]['id'] = tnode
             fnode_coords = self.networkplan.coords[fnode]
             tnode_coords = self.networkplan.coords[tnode]
             
@@ -226,6 +227,7 @@ class Sequencer(object):
         #ToDo: This is INSANELY expensive, need to work on an alternative routine
         
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
+        orig.columns = parse_cols(orig)
         non_xy_cols = orig.columns - ['coords', 'X', 'Y']
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
