@@ -60,6 +60,10 @@ class NetworkPlan(object):
         logger.info('Directing Network Away From Roots')
         # Transform edges to a rooted graph
         self.direct_network()
+
+        # Assert that the netork is a tree
+        self.assert_is_tree()
+
         #fill NAN with zeros
         self._metrics = self.metrics.fillna(0)
         
@@ -108,6 +112,16 @@ class NetworkPlan(object):
 
         # Save the state of the projection
         self.proj = shapefile.crs['proj']
+    
+    def assert_is_tree():
+
+        in_degree = self.network.in_degree()
+        # Test that all roots have in_degree == 0
+        ensure_roots = [in_degree[root] == 0 for root in self.roots]
+        # Test that all leaves have in_degree == 1
+        ensure_leaves = [in_degree[leaf] == 1 for leaf in (set(self.network.node.keys()) - set(self.roots))]
+        
+        assert(all(ensure_roots + ensure_leaves) == True)
 
     def _get_node_attr(self, node, attr):
         """Returns an attribute value from the metrics dataframe"""
