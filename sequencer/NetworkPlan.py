@@ -113,7 +113,7 @@ class NetworkPlan(object):
         # Save the state of the projection
         self.proj = shapefile.crs['proj']
     
-    def assert_is_tree():
+    def assert_is_tree(self):
 
         in_degree = self.network.in_degree()
         # Test that all roots have in_degree == 0
