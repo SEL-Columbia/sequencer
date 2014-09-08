@@ -61,7 +61,7 @@ class Sequencer(object):
         network = self.networkplan.network_to_dict()
         # The roots of the Network dict are the seed for the frontier
         frontier = network.keys()
-        # Initialize a staeting rank
+        # Initialize a starting rank
         rank = 0  
 
         logger.info('Traversing The Input Network and Computing Decision Frontier')
@@ -106,7 +106,7 @@ class Sequencer(object):
                             'Sequence..Upstream.segment.distance.m' : self.networkplan.distance_matrix[self.parent(choice), choice],
                             'Sequence..Decision.metric'             : 1.0 * choice_vars['demand'] / choice_vars['cost']
                           }
-            
+
             # Only yield the row if it is not a fake node
             if choice_row['Sequence..Upstream.id'] is not None:
                 # Update the rank
@@ -116,7 +116,10 @@ class Sequencer(object):
                                                                                                  choice_vars['demand'], choice_vars['cost'],
                                                                                                  choice_vars['demand'] / choice_vars['cost']))
                 yield choice_row
-            
+        
+        # Clear the accumulate cache
+        self.accumulate.cache.clear()
+
     def sequence(self):
         self.results = pd.DataFrame(self._sequence()).set_index('Sequence..Far.sighted.sequence')
         
@@ -143,8 +146,7 @@ class Sequencer(object):
         # Compute individual node variables
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
         parent = self.parent(n)
-        cost = self.networkplan.distance_matrix[parent, n] if parent else 1.0
-        
+        cost = self.networkplan.distance_matrix[parent, n] if parent != None else 0.0
         # Compute the above variables for all child nodes
         downstream_vars = [self.accumulate(child) for child, edge in enumerate(self.networkplan.adj_matrix[n, :]) if edge]
         
@@ -194,9 +196,9 @@ class Sequencer(object):
                                                                                                             x2=tnode_coords[0], y2=tnode_coords[1])
     
     def parent(self, n):
-        parent = [parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge]
+        parent = (parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge)
         # Fake nodes will have no parent
-        return parent[0] if parent else None
+        return next(parent, None)
 
     def _progress_meter(self, progress):
         # Clear the line

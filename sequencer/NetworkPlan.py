@@ -8,6 +8,7 @@ from scipy.sparse import csr_matrix
 import scipy.sparse.csgraph as graph
 import pandas as pd
 import logging
+import copy
 
 from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
 
@@ -176,7 +177,7 @@ class NetworkPlan(object):
         root_child = {}
         for subgraph in self.get_subgraphs():
             nodes_degree = subgraph.in_degree()
-            subgraph = subgraph.node
+            subgraph = copy.deepcopy(subgraph.node)
             for node, degree in nodes_degree.iteritems():
                 if degree == 0:
                     break
