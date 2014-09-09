@@ -133,7 +133,7 @@ class NetworkPlan(object):
         # Figure out which subgraph this is
         sub = next((i+1 for i, g in enumerate(self.get_subgraphs()) if g==graph), None)
         # Log the Subgraph progress
-        logger.info('Solving SUBGRAPH {} / {}'.format(sub, len(list(self.get_subgraphs()))))
+        logger.info('Directing SUBGRAPH {} / {}'.format(sub, len(list(self.get_subgraphs()))))
 
         old_edges = graph.edges()
         dfs_edges = list(nx.traversal.dfs_edges(graph,
