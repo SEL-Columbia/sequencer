@@ -1,0 +1,304 @@
+# -*- coding: utf-8 -*-
+__author__ = 'Brandon Ogle'
+
+import fiona
+import numpy as np
+import networkx as nx
+from scipy.sparse import csr_matrix
+import scipy.sparse.csgraph as graph
+import pandas as pd
+import logging
+import copy
+
+from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
+
+
+logger = logging.getLogger('NetworkPlan')
+logger.setLevel(logging.INFO)
+    
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+
+class NetworkPlan(object):
+    """
+    NetworkPlan containing NetworkPlanner proposed network and 
+    accompanying nodal metrics
+    
+    Parameters
+    ----------
+    shp : file or string (File, directory, or filename to read).
+    csv : string or file handle / StringIO.
+    
+    Example
+    ----------
+    NetworkPlan('/Users/blogle/Downloads/1643/networks-proposed.shp', 
+                '/Users/blogle/Downloads/1643/metrics-local.csv')
+    """
+    
+    def __init__(self, shp, csv, **kwargs):
+        self.shp_p, self.csv_p = shp, csv
+        self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
+
+        logger.info('Asserting Input Projections Match')
+        self._assert_proj_match(shp, csv)
+
+        # Load in and align input data
+        logger.info('Aligning Network Nodes With Input Metrics')
+        self._network, self._metrics = prep_data( nx.read_shp(shp),
+                                                  pd.read_csv(csv, header=1) 
+                                                )
+
+        logger.info('Computing Pairwise Distances')
+        self.distance_matrix = self._distance_matrix()
+        # Set the edge weight to the distance between those nodes
+        self._weight_edges()
+        
+        logger.info('Directing Network Away From Roots')
+        # Transform edges to a rooted graph
+        self.direct_network()
+
+        # Assert that the netork is a tree
+        self.assert_is_tree()
+
+        #fill NAN with zeros
+        self._metrics = self.metrics.fillna(0)
+        
+    def _distance_matrix(self):
+        """Returns the computed distance matrix"""
+
+        # Determine the type of distance measure based on the input projections
+        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
+        # Log the type of metric being used in Sequencing
+        logger.info('Using {} Distance'.format(measure))
+
+        # Convert the nodal coordinate tuples to a np.array
+        coords = np.vstack(map(np.array, self.coords.values()))
+        
+        if measure == 'haversine':
+            # Partially applied haversine function that takes a coord and computes the vector distances for all coords
+            haversine = lambda coord: get_hav_distance(coords[:, 0], coords[:, 1], *coord) 
+            # Map the partially applied function over all coordinates, and stack to a matrix
+            return np.vstack(map(haversine, coords))
+
+        # Partially applied haversine function that takes a coord and computes the vector distances for all coords
+        euclidean = lambda coord: get_euclidean_dist(coords, coord)
+        # Map the partially applied function over all coordinates, and stack to a matrix
+        return np.vstack(map(euclidean, coords))
+    
+    
+    def _assert_proj_match(self, shp, csv):
+        """Ensure that the projections match before continuing"""
+        # Use fiona to open the shapefile as this includes the projection type
+        shapefile = fiona.open(shp)
+        # read the first line of the csv to get the projection
+        csv_proj = open(csv).readline()
+
+        # Parse the Projection to a dictionary
+        csv_proj = csv_proj.split('PROJ.4')[1]
+        pairs = [x.split('=') for x in csv_proj.split(' +') if x != '' and '=' in x]
+        csv_proj = {x[0]:x[1] for x in pairs}
+        # Iterate through and ensure all values match in both projection dicts
+        for key in csv_proj.keys():
+            if key in csv_proj and key in shapefile.crs:
+                try:
+                    assert(str(csv_proj[key]) == str(shapefile.crs[key]))
+                except:
+                    logger.error("csv and shp Projections Don't Match")
+                    raise AssertionError("csv and shapefile Projections Don't Match")
+
+        # Save the state of the projection
+        self.proj = shapefile.crs['proj']
+    
+    def assert_is_tree(self):
+
+        in_degree = self.network.in_degree()
+        # Test that all roots have in_degree == 0
+        ensure_roots = [in_degree[root] == 0 for root in self.roots]
+        # Test that all leaves have in_degree == 1
+        ensure_leaves = [in_degree[leaf] == 1 for leaf in (set(self.network.node.keys()) - set(self.roots))]
+        
+        assert(all(ensure_roots + ensure_leaves) == True)
+
+    def _get_node_attr(self, node, attr):
+        """Returns an attribute value from the metrics dataframe"""
+        return self.metrics[attr].ix[node]
+       
+    def _depth_first_directed(self, graph):
+        """Transforms a networks edges to direct away from the root"""
+        
+        # Figure out which subgraph this is
+        sub = next((i+1 for i, g in enumerate(self.get_subgraphs()) if g==graph), None)
+        # Log the Subgraph progress
+        logger.info('Directing SUBGRAPH {} / {}'.format(sub, len(list(self.get_subgraphs()))))
+
+        old_edges = graph.edges()
+        dfs_edges = list(nx.traversal.dfs_edges(graph,
+                        self._graph_priority(graph.nodes())))
+        #This debug message could be cleaner
+        logger.debug('mapping {} -> {}'.format(old_edges, dfs_edges))
+        graph.remove_edges_from(old_edges)
+        graph.add_edges_from(dfs_edges)
+        
+        logger.info('DONE!')
+        return graph
+    
+    def _graph_priority(self, nodes):
+        """returns the starting node to be used in directing the graph"""
+        
+        # get a view of the DataFrame without positional columns
+        non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords']].ix[nodes]
+        # find rows that are all null, these are the nodes representing the connection to existing infastructure
+        fakes = non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
+        
+        # There theoretically should only be one fake per subgraph
+        if len(fakes) == 1:
+            return fakes[0]
+
+        # If for some reason there is more, its likely due to poor indexes and just pick one
+        elif len(fakes) > 1:
+            logger.warn('More Than One Fake Node In Subgraph {}, \
+                         Something May Have Gone Horribly Wrong in Aligning Your Data!'.format(fakes))
+            return np.random.choice(fakes)
+
+        # If there is no fake node in the subgraph, its not close to infastructure and thus priority is given to MAX(priority metric)
+        else:
+            return self.metrics[self.priority_metric].ix[nodes].idxmax()
+
+    def _weight_edges(self):
+        """sets the edge weights in the graph using the distance matrix"""
+        weights = {}
+        for edge in self.network.edges():
+            weights[edge] = self.distance_matrix[edge]
+        nx.set_edge_attributes(self.network, 'weight', weights)
+    
+    def direct_network(self):
+        """Decomposes a full graph into its components and directs them away from their roots"""
+        #print list(self.get_subgraphs())
+        graphs = [self._depth_first_directed(g) for g in self.get_subgraphs()]
+        self._network = reduce(lambda a, b: nx.union(a, b), graphs)
+        
+    def downstream(self, n):
+        """recursively builds a dictionary of child nodes from the input node"""
+        children = [self.downstream(node) for node, edge in 
+                    enumerate(self.adj_matrix[n, :]) if edge]
+        return {n : children} if children else n
+
+    def root_child_dict(self):
+        root_child = {}
+        for subgraph in self.get_subgraphs():
+            nodes_degree = subgraph.in_degree()
+            subgraph = copy.deepcopy(subgraph.node)
+            for node, degree in nodes_degree.iteritems():
+                if degree == 0:
+                    break
+            assert(nodes_degree[node] == 0)
+            subgraph.pop(node)
+            root_child[node] = subgraph.keys()
+        return root_child
+
+    def _get_subgraphs(self):
+        self.subgraphs = list(nx.weakly_connected_component_subgraphs(self.network))
+
+    def get_subgraphs(self):
+        """returns the components from a directed graph"""
+        if hasattr(self, 'subgraphs') is False:
+            self._get_subgraphs()
+        for sub in self.subgraphs:
+            yield sub
+
+    def network_to_dict(self):
+        """returns a dictionary representation of the full graph"""
+        return reduce(lambda x,y: x.update(y) or x, 
+                      [self.downstream(root) for root in self.roots])         
+    @property
+    def roots(self):
+        return [n for n, k in self.network.in_degree().iteritems() if k == 0]
+
+    @property
+    def coords(self):
+        """returns the nodal coordinants"""
+        return nx.get_node_attributes(self.network, 'coords')
+        
+    @property
+    def adj_matrix(self):
+        """returns the matrix representation of the graph"""
+        return nx.adj_matrix(self.network).toarray()
+    
+    @property
+    def network(self):
+        """returns the DiGraph Object representation of the graph"""
+        return self._network
+    
+    @property
+    def metrics(self):
+        """returns the nodal metrics Pandas DataFrame"""
+        return self._metrics
+
+
+def download_scenario(scenario_number, directory_name=None, username=None, password=None,
+                      np_url='http://networkplanner.modilabs.org/'):
+
+    # TODO: Figure out how to handle case that user didn't give login info
+    # but the SCENARIO happens to be PRIVATE, can't think of a way to validate
+    # until the zip file is downloaded.
+
+    # If no dir specified, dump data to working directory
+    if directory_name is None:
+        directory_name = str(os.getcwd()) + '/' + str(scenario_number) + '/'
+
+    # Standardize/ convert to absolute path
+    directory_name = os.path.abspath(directory_name)
+
+    # Create a Boolean flag indicating if the repo if private
+    # error handling for only 1 NULL value for user & pass
+    private = all([username is not None, password is not None])
+
+    # If the scenario is public, yet there is a credential raise exception
+    if not private and any([username is not None, password is not None]):
+        logger.warn("Private scenario requires both username and password!" +
+                        "Authentication for public scenarios can be omitted.")
+        raise Exception("Private scenario requires both username and password!" +
+                        "Authentication for public scenarios can be omitted.")
+
+    # Reconstructing url for the zip file
+    full_url = np_url + 'scenarios/' + str(scenario_number) + '.zip'
+
+    with requests.Session() as s:
+        # If it is a private repo, then login to network planner
+        if private:
+            # Go to the login page
+            login_page = np_url + "people/login_"
+            # Send the login credentials
+            payload = {'username': username, 'password': password}
+            s.post(login_page, data=payload)
+            print 'LOGGING IN...'
+
+        scenario_data = s.get(full_url)
+
+    # Read in the zipfile contents
+    zip_folder = ZipFile(StringIO(scenario_data.content))
+
+    def write_file(name):
+        content = zip_folder.read(name)
+        path = os.path.join(directory_name, name)
+        subdir = '/'.join(path.split('/')[:-1])
+        # Build directory should it not exist
+        if not os.path.exists(subdir):
+            print('creating {dir}'.format(dir=subdir))
+            os.makedirs(subdir)
+
+        # Open the file and write the zipped contents
+        with open(path, 'wb') as f:
+            f.write(content)
+
+    # Write all the zipped files to disk
+    map(write_file, zip_folder.namelist())
+
+    csv = os.path.join(directory_name, 'metrics-local.csv')
+    shp = os.path.join(directory_name, 'network-proposed.shp')
+
+    return NetworkPlan(shp, csv)

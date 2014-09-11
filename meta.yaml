@@ -1,0 +1,57 @@
+package:
+  name: sequencer
+
+source:
+  git_tag: v0.0.1
+  git_url: https://github.com/SEL-Columbia/Sequencer.git
+
+
+requirements:
+  build:
+    - python
+    - setuptools
+
+  run:
+    - python
+    - dateutil
+    - decorator
+    - fiona
+    - freetype
+    - gdal
+    - libpng
+    - matplotlib
+    - networkx
+    - numexpr
+    - numpy
+    - pandas
+    - pyparsing
+    - pytz
+    - scikit-learn
+    - scipy
+
+test:
+  # Python imports
+  imports:
+    - sequencer
+
+  #commands:
+    # You can put test commands to be run here.  Use this to test that the
+    # entry points work.
+
+
+  # You can also put a file called run_test.py in the recipe that will be run
+  # at test time.
+
+  # requires:
+    # Put any additional test requirements here.  For example
+    # - nose
+
+about:
+  home: https://github.com/SEL-Columbia/Sequencer
+  
+  license:  MIT
+  summary: "Python library for sequencing the output of Network Planner csv's and shape file outputs"
+
+# See
+# http://docs.continuum.io/conda/build.html for
+# more information about meta.yaml
