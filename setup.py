@@ -1,6 +1,6 @@
 from distutils.core import setup
 with open('requirements.txt') as f:
-    required = f.read().splitlines()
+    required = list(f.read().splitlines())
 
 setup(
     # Application name:
@@ -15,9 +15,6 @@ setup(
 
     # Packages
     packages=["sequencer"],
-
-    # Include additional files into the package
-    include_package_data=True,
 
     # Details
     #url="http://pypi.python.org/pypi/MyApplication_v010/",
