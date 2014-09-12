@@ -92,6 +92,10 @@ class Sequencer(object):
                     network.update(item) 
                 else:
                     network.update({item:[]})
+            
+            sys.stdout.write('\r')
+            sys.stdout.write('Solving Frontier of n = {}'.format(len(frontier)))
+            sys.stdout.flush()
 
             # Update the frontier
             frontier = network.keys()
@@ -226,26 +230,36 @@ class Sequencer(object):
         
         logger.info('Joining Sequencer Results on Input Metrics')
         
-        #ToDo: This is INSANELY expensive, need to work on an alternative routine
-        
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         orig.columns = parse_cols(orig)
         non_xy_cols = orig.columns - ['coords', 'X', 'Y']
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
-        tup_cond = lambda tup: (pd.isnull(orig[tup[0]])) if type(tup[1]) is not str and np.isnan(tup[1]) \
-                                                         else (sequenced_metrics[tup[0]] == tup[1])
-        index = lambda row: list(sequenced_metrics[reduce(lambda x, y: x & y, map(tup_cond, row.iteritems()))].index.values)
-        rec_index = [index(row) for row in zip(*orig[non_xy_cols].T.iteritems())[1] if index(row)]
-        joined = pd.concat([sequenced_metrics, orig.ix[list(zip(*rec_index)[0])]])
-        joined['coords'] = joined.apply(lambda df: (df['X'], df['Y']), axis=1)
         
-        self.output_frame = joined
-        logger.info('DONE!')
+        orig['m_coords'] = list(orig[['X', 'Y']].itertuples(index=False))
+        cols_to_join_on = (sequenced_metrics.columns - orig.columns).tolist() + ['m_coords']
+        union = pd.merge(orig, sequenced_metrics[cols_to_join_on], on='m_coords', how='outer')
         
         sorted_columns = orig.columns.tolist() + list(set(sequenced_metrics.columns) - set(orig.columns))
-        self.output_frame = joined[sorted_columns]
+        self.output_frame = union[sorted_columns]
+        del self.output_frame['m_coords']; del self.output_frame['coords']
+        self.output_frame['coords'] = list(self.output_frame[['X', 'Y']].itertuples(index=False))
+                
+        # Assert Output frame has same number of rows as input
+        try:
+            assert(len(orig.index) == len(self.output_frame.index))
+        except:
+            logger.error('Resulting Output does not match the number of rows in Input!')
+        
+        # Assert that Output has no duplicate coordinates
+        try:
+            assert(len(self.output_frame.index) == len(self.output_frame['coords'].unique()))
+        except:
+            logger.error('Duplicate rows detected in Output!')
 
+        logger.info('DONE!')
+
+        
     def nodal_demand(self, df):
         """Overload this method to compute your nodal demand"""
         raise NotImplemented()

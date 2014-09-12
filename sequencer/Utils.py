@@ -14,7 +14,7 @@ def prep_data(network, metrics):
     from the network shapefile with the input metrics, the drops non matching records
     t """
 
-    loc_tol = 1 # meters at the equator, tolerance is stricter towards the poles
+    loc_tol = .5 # meters at the equator, tolerance is stricter towards the poles
     earth_rad = 6371000 # average radius (meters)
     earth_cir = 2*np.pi*earth_rad # cirumference of earth
     meters_degree = (earth_cir / 360) # meters per degree longitude at the equator
@@ -55,8 +55,8 @@ def prep_data(network, metrics):
     metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort()
     
     # drop the m_coords from both frames
-    metrics.drop(labels=['m_coords'], axis=1, inplace=True)
-    node_df.drop(labels=['m_coords'], axis=1, inplace=True)
+    #metrics.drop(labels=['m_coords'], axis=1, inplace=True)
+    #node_df.drop(labels=['m_coords'], axis=1, inplace=True)
   
     # anything in node_df that failed to find a fuzzy_match is a 'Fake' node
     fake_nodes = node_df.ix[node_df.index - metrics.index]

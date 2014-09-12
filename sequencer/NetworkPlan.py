@@ -150,10 +150,9 @@ class NetworkPlan(object):
         """returns the starting node to be used in directing the graph"""
         
         # get a view of the DataFrame without positional columns
-        non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords']].ix[nodes]
+        non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords', 'm_coords']].ix[nodes]
         # find rows that are all null, these are the nodes representing the connection to existing infastructure
         fakes = non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
-        
         # There theoretically should only be one fake per subgraph
         if len(fakes) == 1:
             return fakes[0]
