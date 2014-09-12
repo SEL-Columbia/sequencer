@@ -1,4 +1,5 @@
-from distutils.core import setup
+from setuptools import setup
+
 with open('requirements.txt') as f:
     required = list(f.read().splitlines())
 
