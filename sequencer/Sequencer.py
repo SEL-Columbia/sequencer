@@ -189,9 +189,9 @@ class Sequencer(object):
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
             # Set the edge attributes with those found in sequencing
-            self.networkplan.network.edge[fnode][tnode]['rank'] = rank
-            self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
-            self.networkplan.network.edge[fnode][tnode]['id'] = tnode
+            self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
+            self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
+            self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
             fnode_coords = self.networkplan.coords[fnode]
             tnode_coords = self.networkplan.coords[tnode]
             
