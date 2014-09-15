@@ -172,7 +172,28 @@ class Sequencer(object):
         # Write the shapefiles to path
         nx.write_shp(self.networkplan.network, os.path.join(path, out_shp))
         # Write the csv to path
-        self.output_frame.to_csv(os.path.join(path, out_results), index=False, na_rep='NaN')
+        cast = {
+                'Sequence..Vertex.id'            : int,
+                'Sequence..Root.vertex.id'       : int ,
+                'Sequence..Upstream.id'          : int,
+                'Sequence..Far.sighted.sequence' : int}
+        
+        for k,v in cast.iteritems():
+            self.output_frame[k] = self.output_frame[k].fillna(-5059030070).astype(v)        
+        self.output_frame.to_csv(os.path.join(path, 'temp.csv'), index=False, na_rep='NaN')
+        
+        with open(os.path.join(path, 'temp.csv')) as f:
+            buff = f.read()
+            while True:
+                idx = buff.find('-5059030070')
+                if idx != -1:
+                    buff = buff.replace('-5059030070', 'NaN', idx)
+                else:
+                    break
+
+        with open(os.path.join(path, out_results), 'w') as f:
+            f.write(buff)
+        os.remove(os.path.join(path, 'temp.csv'))
         
         # Trash the node shp files
         [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
@@ -189,9 +210,9 @@ class Sequencer(object):
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
             # Set the edge attributes with those found in sequencing
-            self.networkplan.network.edge[fnode][tnode]['rank'] = rank
-            self.networkplan.network.edge[fnode][tnode]['distance'] = self.networkplan.distance_matrix[fnode, tnode]
-            self.networkplan.network.edge[fnode][tnode]['id'] = tnode
+            self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
+            self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
+            self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
             fnode_coords = self.networkplan.coords[fnode]
             tnode_coords = self.networkplan.coords[tnode]
             
