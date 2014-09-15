@@ -26,5 +26,5 @@ setup(
     long_description=open("README.md").read(),
 
     # Dependent packages (distributions)
-    install_requires= required
+    #install_requires= required
 )
