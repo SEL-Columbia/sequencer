@@ -3,47 +3,66 @@ NetworkPlanner Sequencer
 
 This module aims to replace [NetworkPlanner.R](https://github.com/sel-columbia/networkplanner.R), with an object 
 oriented pythonic implementation. The python version also depends on NetworkX as opposed to the R counterparts igraph 
-module. Furthermore, I hope to transition many of the graph algorithms to the scipy csgraph (adjacency matrix based) 
-module for improved performance.
+module. 
 
-``` python
-from sequencer import NetworkPlan, Sequencer
+#Quickstart
+if you want to quickly get up and running, grab an electrification scenario from 
+[NetworkPlanner](http://networkplanner.modilabs.org/scenarios) and follow along with the provided demo_sequencer.py
 
-class DemoSequencer(Sequencer):
-    """Demo Sequencer, to demonstrate the module"""
+The required toolset for this example is the NetworkPlan object and a Sequencer Model
 
-    # Overload the nodal_demand function with your metric
-    def nodal_demand(self, df):
-        # Nonsensical demand function
-        return df['P_dem_ho'] + df['Metric > Maximum length of medium voltage line extension']
-
-if __name__ == '__main__':
-    
-    csv = '/Users/blogle/Downloads/1643/metrics-local.csv'
-    shp = '/Users/blogle/Downloads/1643/networks-proposed.shp'
-    
-    # Initialize a NetworkPlan from NetworkPlanner shapefile and csv,
-    # also a column to prioritize (defaults to population)
-    
-    mynetworkplan = NetworkPlan(shp, csv, prioritize='P_dem_ho')
-    
-    # Initialize the Sequencer with the NetworkPlan
-    mysequencer = DemoSequencer(mynetworkplan)
-
-    print mysequencer.sequence()
+```python 
+from sequencer import NetworkPlan
+from sequencer.Models import EnergyMaximizeReturn
 ```
-<div class="output_wrapper"><div class="out_prompt_overlay prompt" title="click to scroll output; double click to hide" style=""></div><div class="output" style=""><div class="output_area"><div class="prompt output_prompt"></div><div class="output_subarea output_html rendered_html output_pyout"><div style="max-height:1000px;max-width:1500px;overflow:auto;">
+
+The NetworkPlan object takes a path to a shapefile containing nodes and edges and a corresponding metrics csv. 
+```python
+csv = '/Users/blogle/Downloads/3305/metrics-local.csv'
+shp = '/Users/blogle/Downloads/3305/networks-proposed.shp'
+```
+
+Upon instantiating this object, the nodes are joined on the metrics file and all subgraphs (or components) are 
+directed away from their roots. 'Fake' nodes are placeholders with no corresponding metric data used to 
+represent the position of the existing infastructure (in this case a grid). If a subgraph contains a 'Fake' node, 
+this is chosen as its root, otherwise its root is determined by prioritizing some metric.
+
+```python
+nwp = NetworkPlan(shp, csv, prioritize='Population')
+```
+
+The above NetworkPlan will direct away from the grid, or if the subgraph has no connection to the grid it will direct
+away from the most populated nodes. The prioritize keyword argument defaults to 'population', so if this field is not 
+in your metrics you will need to pass it an alternative parameter.
+
+```python
+model = EnergyMaximizeReturn(nwp)
+model.sequence()
+```
+
+Finally instantiate the model with the NetworkPlan and call sequence. This computes a frontier of possible nodes 
+accessible from the roots, and iteratively traveses the tree optimizing some heuristic. The sequence method builds a 
+DataFrame containing the results of the traversal, namely the sequence rank for all nodes. 
+
+Note: The results dataframe is accesible through```python model.results```
+<div class="output_wrapper"><div class="out_prompt_overlay prompt" title="click to scroll output; double click to hide" style=""></div><div class="output" style=""><div class="output_area"><div class="prompt output_prompt">Out[12]:</div><div class="output_subarea output_html rendered_html output_pyout"><div style="max-height:1000px;max-width:1500px;overflow:auto;">
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
       <th></th>
-      <th>demand</th>
-      <th>distance_from_parent</th>
-      <th>metric</th>
-      <th>node</th>
+      <th>Sequence..Decision.metric</th>
+      <th>Sequence..Downstream.demand.sum.kwh</th>
+      <th>Sequence..Downstream.distance.sum.m</th>
+      <th>Sequence..Root.vertex.id</th>
+      <th>Sequence..Upstream.id</th>
+      <th>Sequence..Upstream.segment.distance.m</th>
+      <th>Sequence..Vertex.id</th>
     </tr>
     <tr>
-      <th>rank</th>
+      <th>Sequence..Far.sighted.sequence</th>
+      <th></th>
+      <th></th>
+      <th></th>
       <th></th>
       <th></th>
       <th></th>
@@ -53,101 +72,147 @@ if __name__ == '__main__':
   <tbody>
     <tr>
       <th>1  </th>
-      <td> 1311992.655328</td>
-      <td> 1.000000</td>
-      <td> 1311992.655328</td>
-      <td>  31</td>
+      <td> 2780868.271316</td>
+      <td> 28013000</td>
+      <td>    10.073472</td>
+      <td>  27</td>
+      <td>  27</td>
+      <td>   10.073472</td>
+      <td>  25</td>
     </tr>
     <tr>
       <th>2  </th>
-      <td>  193245.823512</td>
-      <td> 0.301721</td>
-      <td>  640478.303476</td>
-      <td>  67</td>
+      <td>    7010.936648</td>
+      <td> 44720000</td>
+      <td>  6378.605633</td>
+      <td> 505</td>
+      <td> 505</td>
+      <td>   16.171168</td>
+      <td> 391</td>
     </tr>
     <tr>
       <th>3  </th>
-      <td>  906296.794866</td>
-      <td> 1.686770</td>
-      <td>  537297.057125</td>
-      <td> 104</td>
+      <td>     960.761193</td>
+      <td>  1217000</td>
+      <td>  1266.703952</td>
+      <td> 392</td>
+      <td> 392</td>
+      <td>  537.213092</td>
+      <td> 342</td>
     </tr>
     <tr>
       <th>4  </th>
-      <td>  903510.987999</td>
-      <td> 0.367407</td>
-      <td> 2459154.571464</td>
-      <td>   6</td>
+      <td>     452.370301</td>
+      <td>   330000</td>
+      <td>   729.490860</td>
+      <td> 392</td>
+      <td> 342</td>
+      <td>  155.021075</td>
+      <td> 304</td>
     </tr>
     <tr>
       <th>5  </th>
-      <td>  900725.181132</td>
-      <td> 1.856837</td>
-      <td>  485085.744979</td>
-      <td>  56</td>
+      <td>     464.776402</td>
+      <td>   267000</td>
+      <td>   574.469785</td>
+      <td> 392</td>
+      <td> 304</td>
+      <td>  574.469785</td>
+      <td> 212</td>
     </tr>
     <tr>
-      <th>...</th>
+      <th>...  </th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
       <td>...</td>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>105</th>
-      <td>    3805.787912</td>
-      <td> 1.304664</td>
-      <td>    2917.063744</td>
-      <td>  61</td>
+      <th>519</th>
+      <td>      15.164609</td>
+      <td>   165000</td>
+      <td> 10880.596829</td>
+      <td> 424</td>
+      <td> 210</td>
+      <td> 6113.945502</td>
+      <td> 228</td>
     </tr>
     <tr>
-      <th>106</th>
-      <td>    5151.838874</td>
-      <td> 1.794850</td>
-      <td>    2870.345763</td>
-      <td>  17</td>
+      <th>520</th>
+      <td>      21.818252</td>
+      <td>   104000</td>
+      <td>  4766.651327</td>
+      <td> 424</td>
+      <td> 228</td>
+      <td> 4766.651327</td>
+      <td> 421</td>
     </tr>
     <tr>
-      <th>107</th>
-      <td>    8043.271517</td>
-      <td> 2.826317</td>
-      <td>    2845.848824</td>
-      <td>  46</td>
+      <th>521</th>
+      <td>      13.653252</td>
+      <td>   219000</td>
+      <td> 16040.134490</td>
+      <td> 424</td>
+      <td> 210</td>
+      <td> 3982.017803</td>
+      <td> 486</td>
     </tr>
     <tr>
-      <th>108</th>
-      <td>    6363.240814</td>
-      <td> 1.787285</td>
-      <td>    3560.282343</td>
-      <td>  44</td>
+      <th>522</th>
+      <td>      12.025095</td>
+      <td>   145000</td>
+      <td> 12058.116687</td>
+      <td> 424</td>
+      <td> 486</td>
+      <td> 6212.158996</td>
+      <td> 325</td>
     </tr>
     <tr>
-      <th>109</th>
-      <td>    6020.821377</td>
-      <td> 2.348822</td>
-      <td>    2563.336854</td>
-      <td> 110</td>
-    </tr>
-    <tr>
-      <th>110</th>
-      <td>    6020.821377</td>
-      <td> 2.706031</td>
-      <td>    2224.964097</td>
-      <td> 124</td>
-    </tr>
-        <tr>
-      <th>...</th>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
-      <td>...</td>
+      <th>523</th>
+      <td>      11.460911</td>
+      <td>    67000</td>
+      <td>  5845.957691</td>
+      <td> 424</td>
+      <td> 325</td>
+      <td> 5845.957691</td>
+      <td>  42</td>
     </tr>
   </tbody>
 </table>
-<p>132 rows × 4 columns</p>
 </div></div></div></div><div class="btn output_collapsed" title="click to expand output" style="display: none;">. . .</div></div>
 
-#Heirarchial Representaion
+
+```python 
+model.output('/Users/blogle/Downloads/3305/output/')
+```
+This will output a shapefile of edges and a csv containing the outer join of sequence results and the input metrics.
+
+#Sequencer Models
+
+There is a Sequencer base class to build your own models off of. After subclassing Sequencer, you must overload the 
+nodal_demand method. This method should return a linear combination of n-columns in the input metrics that is then 
+appended to Sequencer.NetworkPlan.metrics, that the sequencer will use to optimize the network. For an example of how
+to roll out your own model, see sequencer/Models.py for examples.
+
+```python 
+class EnergyMaximizeReturn(Sequencer):
+    """This class sequences a proposed electrification plan, optimizing for maximum Demand (kwh) / Distance (m)"""
+    
+    def nodal_demand(self, df):
+        return df['Demand...Projected.nodal.demand.per.year']
+    
+    def _strip_cols(self):
+      del (self.output_frame['nodal_demand'])
+
+    def sequence(self):
+        super(EnergyMaximizeReturn, self).sequence()
+        self._strip_cols()
+```
+
+#Hierarchial Representaion
 ```python
 import networkx as nx
 figsize(30, 30)
@@ -170,30 +235,14 @@ You can easily create a new env with the listed packages by running
 ```bash
 conda create -n [your env] -file requirements.txt
 ```
+You can build the package using the [recipe](https://github.com/SEL-Columbia/conda-recipes)
 
 If you plan to play with the sequencer interactively and want to output graphics like those above, you will need 
-Pygraphviz. Pygraphviz is not in the default channel for conda and is commented out in the requirements.txt, however 
-it can be pulled from binstar.org and built with 
+Pygraphviz. Pygraphviz is not in the default channel for conda however it can be pulled from binstar.org 
+and built with 
 
 ```bash 
 conda install -c https://conda.binstar.org/mhworth pygraphviz  
 ```
 
-##Pip
 
-I dont use pip so I dont know if it will have all packages in requirements.txt, nor do I know if it will grab all 
-their dependencies.
-
-so your mileage will vary attempting 
-```bash
-pip install requirements.txt
-```
-
-##Setup
-
-There are no build tools for the sequencer as of yet, so for dev purposes the easiest way to get up and running is to 
-clone the repo and symlink the sequencer subfolder into your site packages.
-
-```bash
-ln -s Yourpath/Sequencer/sequencer Yourpath/site-packages
-```
