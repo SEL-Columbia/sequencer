@@ -44,7 +44,7 @@ Finally instantiate the model with the NetworkPlan and call sequence. This compu
 accessible from the roots, and iteratively traveses the tree optimizing some heuristic. The sequence method builds a 
 DataFrame containing the results of the traversal, namely the sequence rank for all nodes. 
 
-Note: The results dataframe is accesible through```python model.results```
+Note: The results dataframe is accesible through```model.results```
 <div class="output_wrapper"><div class="out_prompt_overlay prompt" title="click to scroll output; double click to hide" style=""></div><div class="output" style=""><div class="output_area"><div class="prompt output_prompt">Out[12]:</div><div class="output_subarea output_html rendered_html output_pyout"><div style="max-height:1000px;max-width:1500px;overflow:auto;">
 <table border="1" class="dataframe">
   <thead>
