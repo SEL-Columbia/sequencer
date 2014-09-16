@@ -179,15 +179,15 @@ class Sequencer(object):
                 'Sequence..Far.sighted.sequence' : int}
         
         for k,v in cast.iteritems():
-            self.output_frame[k] = self.output_frame[k].fillna(-5059030070).astype(v)        
+            self.output_frame[k] = self.output_frame[k].fillna(-9223372036854775807).astype(v)        
         self.output_frame.to_csv(os.path.join(path, 'temp.csv'), index=False, na_rep='NaN')
         
         with open(os.path.join(path, 'temp.csv')) as f:
             buff = f.read()
             while True:
-                idx = buff.find('-5059030070')
+                idx = buff.find('-9223372036854775807')
                 if idx != -1:
-                    buff = buff.replace('-5059030070', 'NaN', idx)
+                    buff = buff.replace('-9223372036854775807', 'NaN', idx)
                 else:
                     break
 
