@@ -13,7 +13,7 @@ class catch_prints(object):
     def flush(self):
         pass
 
-sys.stdout = catch_prints()    
+#sys.stdout = catch_prints()    
 
 def gen_data():
     """
@@ -56,6 +56,11 @@ class TestNetworkPlan(NetworkPlan):
 
         # Transform edges to a rooted graph                                                                                                                                   
         self.direct_network()
+        
+        # List of fake nodes
+        self.fake_nodes = [0]
+
+        # Fillna with 0
         self._metrics = self.metrics.fillna(0)
 
 class TestSequencer(Sequencer):
@@ -111,7 +116,9 @@ def test_accumulate_cost():
              5 : get_distance(2, 5),
              6 : get_distance(2, 6)}
 
-    eq_(np.all([np.allclose(acc_dicts[node]['cost'], costs[node]) for node in nwp.network.node.keys()]), True)
+
+    costs = {node : (acc_dicts[node]['cost'], costs[node]) for node in nwp.network.node.keys()}
+    eq_(np.all(map(lambda tup: np.allclose(*tup), costs.values())), True)
 
 def test_sequencer_follows_topology():
     """Tests that the sequencer doesn't skip nodes in the network"""

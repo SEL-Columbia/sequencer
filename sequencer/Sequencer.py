@@ -51,6 +51,10 @@ class Sequencer(object):
     
     def __init__(self, NetworkPlan):
         self.networkplan = NetworkPlan
+        
+        # Build a list of the fake nodes in the network
+        self.fakes = self.networkplan.fake_nodes
+
         # Create a column containing the computed demand
         self.networkplan.metrics['nodal_demand'] = self.nodal_demand(self.networkplan.metrics)
         self.root_children = self.networkplan.root_child_dict()
@@ -78,7 +82,10 @@ class Sequencer(object):
                 demand = accum_dict['demand']
                 cost = accum_dict['cost']
                 # Compute the metric
-                metric = 1.0 * demand / cost
+                if cost > 0:
+                    metric = 1.0 * demand / cost
+                else:
+                    metric = np.inf
 
                 if metric > max_:
                     # Update the metric and potential candidate
@@ -88,10 +95,7 @@ class Sequencer(object):
             
             # Remove the candidate from the Network and shift its downstream neighbors to the keys
             for item in network.pop(choice):
-                if type(item) != int:
-                    network.update(item) 
-                else:
-                    network.update({item:[]})
+                network.update(item) 
             
             sys.stdout.write('\r')
             sys.stdout.write('Solving Frontier of n = {}'.format(len(frontier)))
@@ -107,12 +111,12 @@ class Sequencer(object):
                             'Sequence..Downstream.distance.sum.m'   : choice_vars['cost'],
                             'Sequence..Root.vertex.id'              : self.get_root(choice),
                             'Sequence..Upstream.id'                 : self.parent(choice),
-                            'Sequence..Upstream.segment.distance.m' : self.networkplan.distance_matrix[self.parent(choice), choice],
+                            'Sequence..Upstream.segment.distance.m' : self.upstream_distance(choice),
                             'Sequence..Decision.metric'             : 1.0 * choice_vars['demand'] / choice_vars['cost']
                           }
 
-            # Only yield the row if it is not a fake node
-            if choice_row['Sequence..Upstream.id'] is not None:
+            
+            if choice not in self.fakes:
                 # Update the rank
                 rank += 1
                 choice_row['Sequence..Far.sighted.sequence'] = rank
@@ -123,6 +127,13 @@ class Sequencer(object):
         
         # Clear the accumulate cache
         self.accumulate.cache.clear()
+
+    def upstream_distance(self, node):
+        """Computes the edge distance from a node to it's parent"""
+        parent = self.parent(node)
+        if parent != None:
+            return self.networkplan.distance_matrix[parent, node]
+        return 0.0
 
     def sequence(self):
         self.results = pd.DataFrame(self._sequence()).set_index('Sequence..Far.sighted.sequence')
@@ -147,10 +158,11 @@ class Sequencer(object):
     @memoize
     def accumulate(self, n):
         """traverses the tree computing downstream aggregates"""
+
         # Compute individual node variables
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
-        parent = self.parent(n)
-        cost = self.networkplan.distance_matrix[parent, n] if parent != None else 0.0
+        cost = self.upstream_distance(n)
+        
         # Compute the above variables for all child nodes
         downstream_vars = [self.accumulate(child) for child, edge in enumerate(self.networkplan.adj_matrix[n, :]) if edge]
         
@@ -204,21 +216,22 @@ class Sequencer(object):
         for node in self.networkplan.network.nodes():
             # Build Node WKT with Point coords
             self.networkplan.network.node[node]['Wkt'] = 'POINT ({x} {y})'.format(x=self.networkplan.coords[node][0],
-                                                                                  y=self.networkplan.coords[node][0])
+                                                                                  y=self.networkplan.coords[node][1])
     def _build_edge_wkt(self):
         r = self.results
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
-            # Set the edge attributes with those found in sequencing
-            self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
-            self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
-            self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
-            fnode_coords = self.networkplan.coords[fnode]
-            tnode_coords = self.networkplan.coords[tnode]
-            
-            # Build WKT Linestring with from_node and to_node coords
-            self.networkplan.network.edge[fnode][tnode]['Wkt'] = 'LINESTRING ({x1} {y1}, {x2} {y2})'.format(x1=fnode_coords[0], y1=fnode_coords[1],
-                                                                                                            x2=tnode_coords[0], y2=tnode_coords[1])
+            if not np.isnan(fnode):
+                # Set the edge attributes with those found in sequencing
+                self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
+                self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
+                self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
+                fnode_coords = self.networkplan.coords[fnode]
+                tnode_coords = self.networkplan.coords[tnode]
+                
+                # Build WKT Linestring with from_node and to_node coords
+                self.networkplan.network.edge[fnode][tnode]['Wkt'] = 'LINESTRING ({x1} {y1}, {x2} {y2})'.format(x1=fnode_coords[0], y1=fnode_coords[1],
+                                                                                                                x2=tnode_coords[0], y2=tnode_coords[1])
     
     def parent(self, n):
         parent = (parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge)
@@ -253,7 +266,6 @@ class Sequencer(object):
         
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         orig.columns = parse_cols(orig)
-        non_xy_cols = orig.columns - ['coords', 'X', 'Y']
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
         
@@ -263,7 +275,7 @@ class Sequencer(object):
         
         sorted_columns = orig.columns.tolist() + list(set(sequenced_metrics.columns) - set(orig.columns))
         self.output_frame = union[sorted_columns]
-        del self.output_frame['m_coords']; del self.output_frame['coords']
+        self.output_frame = self.output_frame.drop(['m_coords', 'coords'], axis=1)
         self.output_frame['coords'] = list(self.output_frame[['X', 'Y']].itertuples(index=False))
                 
         # Assert Output frame has same number of rows as input
@@ -272,7 +284,7 @@ class Sequencer(object):
         except:
             logger.error('Resulting Output does not match the number of rows in Input!')
         
-        # Assert that Output has no duplicate coordinates
+        # Assert that Output has no duplicate coordinates THIS IS A BAD TEST AS THE PRECISION IS TRUNCATED
         try:
             assert(len(self.output_frame.index) == len(self.output_frame['coords'].unique()))
         except:

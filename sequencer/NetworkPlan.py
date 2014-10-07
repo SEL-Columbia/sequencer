@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-utf
 __author__ = 'Brandon Ogle'
 
 import fiona
@@ -38,7 +38,8 @@ class NetworkPlan(object):
     NetworkPlan('/Users/blogle/Downloads/1643/networks-proposed.shp', 
                 '/Users/blogle/Downloads/1643/metrics-local.csv')
     """
-    
+    TOL = .5 # meters at the equator, tolerance is stricter towards the poles
+
     def __init__(self, shp, csv, **kwargs):
         self.shp_p, self.csv_p = shp, csv
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
@@ -49,11 +50,19 @@ class NetworkPlan(object):
         # Load in and align input data
         logger.info('Aligning Network Nodes With Input Metrics')
         self._network, self._metrics = prep_data( nx.read_shp(shp),
-                                                  pd.read_csv(csv, header=1) 
+                                                  pd.read_csv(csv, header=1),
+                                                  loc_tol = self.TOL
                                                 )
 
         logger.info('Computing Pairwise Distances')
         self.distance_matrix = self._distance_matrix()
+         
+        if len(self.distance_matrix[(self.distance_matrix > 0) & (self.distance_matrix < self.TOL)]) > 0:
+            logger.error("""Dataset Contains Edges, Less Than {tolerance} Meters! 
+                          This can result in incorrect alignment of metrics and network, 
+                          where fake nodes are incorrectly assigned metrics. 
+                          This error is resolved by buffering your input data.""".format(tolerance=self.TOL))
+
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
         
@@ -64,9 +73,12 @@ class NetworkPlan(object):
         # Assert that the netork is a tree
         self.assert_is_tree()
 
-        #fill NAN with zeros
+        # Build list of fake nodes
+        self.fake_nodes = self.fakes(self.metrics.index)
+
+        #Fillna values with Zero
         self._metrics = self.metrics.fillna(0)
-        
+
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
 
@@ -145,14 +157,20 @@ class NetworkPlan(object):
         
         logger.info('DONE!')
         return graph
-    
-    def _graph_priority(self, nodes):
-        """returns the starting node to be used in directing the graph"""
-        
+
+    def fakes(self, nodes):
+        """applies a filter to the input nodes, returning the subset representing fake nodes"""
+
         # get a view of the DataFrame without positional columns
         non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords', 'm_coords']].ix[nodes]
         # find rows that are all null, these are the nodes representing the connection to existing infastructure
-        fakes = non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
+        return non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
+   
+    def _graph_priority(self, nodes):
+        """returns the starting node to be used in directing the graph"""
+       
+        fakes = self.fakes(nodes)
+        
         # There theoretically should only be one fake per subgraph
         if len(fakes) == 1:
             return fakes[0]
@@ -184,7 +202,7 @@ class NetworkPlan(object):
         """recursively builds a dictionary of child nodes from the input node"""
         children = [self.downstream(node) for node, edge in 
                     enumerate(self.adj_matrix[n, :]) if edge]
-        return {n : children} if children else n
+        return {n : children} if children else {n : []}
 
     def root_child_dict(self):
         root_child = {}
