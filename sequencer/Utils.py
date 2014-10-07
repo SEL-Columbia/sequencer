@@ -34,10 +34,15 @@ def prep_data(network, metrics, loc_tol=.5):
     coords_vec = np.vstack(metrics['m_coords'].values)
 
     # fuzzy_match takes a coordinate pair and returns the approximate match from the metrics dataframe using float_tol
-    fuzzy_match = lambda coord: coords_vec[hav_dist(coords_vec, coord) < loc_tol]
+    def fuzzy_match(coord):
+        dists = hav_dist(coords_vec, coord)
+        idx, val = min_tuple(dists)
+        if val < loc_tol:
+            return coords_vec[idx]
+        return []
 
     # map over the coords in the nodal dataframe returning the fuzzy match from metrics
-    node_df['m_coords'] = node_df['coords'].apply(lambda coord: next((x for x in fuzzy_match(coord)), []))
+    node_df['m_coords'] = node_df['coords'].apply(fuzzy_match)
     
     # cast the coordinates back to tuples (hashable) 
     node_df['m_coords'] = node_df['m_coords'].apply(tuple)
@@ -62,6 +67,10 @@ def prep_data(network, metrics, loc_tol=.5):
     network = network.to_undirected().to_directed()
     
     return network, metrics
+
+def min_tuple(series):
+    idx = np.argmin(series)
+    return (idx, series[idx])
 
 def hav_dist(vector,point):
     lat = vector[:, 0]
