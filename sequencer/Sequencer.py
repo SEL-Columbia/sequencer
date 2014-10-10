@@ -232,7 +232,19 @@ class Sequencer(object):
                 # Build WKT Linestring with from_node and to_node coords
                 self.networkplan.network.edge[fnode][tnode]['Wkt'] = 'LINESTRING ({x1} {y1}, {x2} {y2})'.format(x1=fnode_coords[0], y1=fnode_coords[1],
                                                                                                                 x2=tnode_coords[0], y2=tnode_coords[1])
-    
+        # Filter empty edges
+        edges = {(k1, k2): attr for k1, v in self.networkplan.network.edge.iteritems() if v!={}
+                                for k2, attr in v.iteritems() if attr!={}}
+        self.networkplan.network.edge = edges
+        # Clear all edges from the networkx 
+        self.networkplan.network.remove_edges_from(self.networkplan.network.edges())
+        # Reset with the filtered edges
+        self.networkplan.network.add_edges_from(edges.keys())
+        # Set the atrributes
+        attrs = set([v for i in edges.values() for v in i.keys()]) 
+        for attr in attrs:
+            nx.set_edge_attributes(self.networkplan.network, attr, pd.DataFrame(edges).ix[attr].to_dict())
+
     def parent(self, n):
         parent = (parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge)
         # Fake nodes will have no parent
