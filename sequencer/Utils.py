@@ -50,13 +50,13 @@ def prep_data(network, metrics, loc_tol=.5):
     
     # now that we have identical metric coords in both node_df and metrics join on that column
     metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort()
-    
+
     #drop duplicate matches
     find_closest = lambda x: x.index[np.argmin(hav_dist(np.vstack(x['coords']), x.name))]
     closest_match = metrics.ix[metrics.groupby('m_coords').apply(find_closest).values]
     
     # anything in node_df that failed to find a fuzzy_match is a 'Fake' node
-    fake_nodes = node_df.ix[node_df.index - closest_match.index]
+    fake_nodes = node_df[~node_df.index.isin(closest_match.index)]
     # reset m_coords on fakes
     fake_nodes['m_coords'] = fake_nodes['m_coords'].apply(lambda x: ())
     
