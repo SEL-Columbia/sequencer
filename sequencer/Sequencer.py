@@ -28,9 +28,9 @@ def memoize(f):
         last_prog = None
         
     @wraps(f)
-    def memoizedFunction(*args):
+    def memoizedFunction(*args, **kwargs):
         if args not in cache:
-            cache[args] = f(*args)
+            cache[args] = f(*args, **kwargs)
 
             # Get the number of keys in the the cache and send to the progress meter
             if len(cache.keys()) != scope.last_prog:
@@ -156,7 +156,7 @@ class Sequencer(object):
                 return root
     
     @memoize
-    def accumulate(self, n):
+    def accumulate(self, n, adj_matrix=None):
         """traverses the tree computing downstream aggregates"""
 
         # Compute individual node variables
@@ -164,7 +164,11 @@ class Sequencer(object):
         cost = self.upstream_distance(n)
         
         # Compute the above variables for all child nodes
-        downstream_vars = [self.accumulate(child) for child, edge in enumerate(self.networkplan.adj_matrix[n, :]) if edge]
+        # save space by passing adj_matrix by ref into recursive calls
+        if adj_matrix is None:
+            adj_matrix = self.networkplan.adj_matrix
+
+        downstream_vars = [self.accumulate(child, adj_matrix=adj_matrix) for child, edge in enumerate(adj_matrix[n, :]) if edge]
         
         if downstream_vars:
             # Aggreagte all the variables that were found downstream

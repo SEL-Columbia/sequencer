@@ -199,9 +199,19 @@ class NetworkPlan(object):
         self._network = reduce(lambda a, b: nx.union(a, b), graphs)
         
     def downstream(self, n):
+        """
+        Builds a nested dict of downstream nodes for input node n
+        """
+
+        # instantiate adj_matrix once to be passed to helper by
+        # reference 
+        adj_matrix = self.adj_matrix
+        return self._downstream_helper(n, adj_matrix)
+
+    def _downstream_helper(self, n, adj_matrix):
         """recursively builds a dictionary of child nodes from the input node"""
-        children = [self.downstream(node) for node, edge in 
-                    enumerate(self.adj_matrix[n, :]) if edge]
+        children = [self._downstream_helper(node, adj_matrix) for node, edge in 
+                    enumerate(adj_matrix[n, :]) if edge]
         return {n : children} if children else {n : []}
 
     def root_child_dict(self):
