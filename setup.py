@@ -8,11 +8,10 @@ setup(
     name="Sequencer",
 
     # Version number (initial):
-    version="0.0.1",
+    version="0.0.3",
 
     # Application author details:
     author="Brandon Ogle",
-    author_email="oglebrandon@gmail.com",
 
     # Packages
     packages=["sequencer"],
