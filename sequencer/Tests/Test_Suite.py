@@ -1,8 +1,11 @@
 import numpy as np
 import networkx as nx
+import os
 
 from pandas import DataFrame
+import pandas as pd
 from sequencer import NetworkPlan, Sequencer
+from sequencer.Models import EnergyMaximizeReturn
 from nose.tools import eq_ 
 
 import sys
@@ -132,3 +135,37 @@ def test_sequencer_follows_topology():
     eq_(np.all([fnode in nwp.roots or fnode in tnodes.ix[:i-1] for i, fnode in fnodes.iterkv()]), True)
 
 
+def test_sequencer_compare():
+    """
+    Test an old output to ensure we don't regress
+    """
+    input_dir = "data/sumaila/input"
+    csv_file = os.path.join(input_dir, "metrics-local.csv")
+    shp_file = os.path.join(input_dir, "networks-proposed.shp")
+    nwp = NetworkPlan(shp_file, csv_file, prioritize='Population')
+    model = EnergyMaximizeReturn(nwp)
+
+    model.sequence()
+
+    expected_dir = "data/sumaila/expected_output"
+    exp_csv_file = os.path.join(expected_dir, "sequenced-results.csv")
+    exp_df = pd.read_csv(exp_csv_file)
+    # exp_shp_file = os.path.join(expected_dir, "edges.shp")
+    # expected_nwp = NetworkPlan(shp_file, exp_csv_file, prioritize='Population')
+
+    # now compare results to expected
+    #expected_net = expected_nwp.network
+    compare_fields = ['Sequence..Vertex.id', 'Sequence..Far.sighted.sequence']
+
+    # exp_node_dict = expected_net.nodes(data=True)
+    # exp_node_tups = [tuple(map(d.get, compare_fields)) for d in exp_node_dict]
+    exp_node_tups = map(tuple, exp_df[compare_fields].values)
+    seq_node_tups = map(tuple, model.output_frame[compare_fields].values)
+    exp_node_tups = filter(lambda tup: tup[0] > 0, exp_node_tups)
+    seq_node_tups = filter(lambda tup: tup[0] > 0, seq_node_tups)
+    seq_node_tups = map(lambda tup: tuple(map(int, tup)), seq_node_tups)
+    # seq_node_tups = [tuple(map(seq_node_dict[d].get, compare_fields)) for d in seq_node_dict]
+
+    assert sorted(exp_node_tups, key=lambda tup: tup[0]) == \
+           sorted(seq_node_tups, key=lambda tup: tup[0]),\
+           "expected nodes do not match sequenced"

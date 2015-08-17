@@ -156,19 +156,45 @@ class Sequencer(object):
                 return root
     
     @memoize
-    def accumulate(self, n, adj_matrix=None):
+    def accumulate(self, n):
         """traverses the tree computing downstream aggregates"""
 
         # Compute individual node variables
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
         cost = self.upstream_distance(n)
         
-        # Compute the above variables for all child nodes
-        # save space by passing adj_matrix by ref into recursive calls
-        if adj_matrix is None:
-            adj_matrix = self.networkplan.adj_matrix
+        post_order_stack = []
+        # create a post_order_traversal of downstream tree
+        # then sum up accumulated values as we pop off 
+        # un-ravel recursiveness since for large networks we hit a limit
+        # works recursive like with all_children acting like a stack
+        all_children = [(n, child) for child in self.networkplan.get_successors(n)]
+        self.accumulate.cache[n] = {'demand': demand, 'cost': cost}
+        while all_children:
+            parent, child = all_children.pop()
+            child_demand = self.networkplan.metrics['nodal_demand'].ix[child]
+            child_cost = self.upstream_distance(child)
+            self.accumulate.cache[child] = {'demand': child_demand, 'cost': child_cost}
+            post_order_stack.append((parent, child))
+            all_children += [(child, child_child) for child_child in self.networkplan.get_successors(child)]
 
-        downstream_vars = [self.accumulate(child, adj_matrix=adj_matrix) for child, edge in enumerate(adj_matrix[n, :]) if edge]
+        # now we have post_order_stack defined, pop it and populate cache back up the tree
+        while post_order_stack:
+            parent, child = post_order_stack.pop()
+        
+            # now add to parent
+            self.accumulate.cache[parent]['demand'] += self.accumulate.cache[child]['demand']
+            self.accumulate.cache[parent]['cost'] += self.accumulate.cache[child]['cost']
+
+            demand += child_demand
+            cost += child_cost
+        
+        """
+        # Compute the above variables for all child nodes
+        downstream_vars = [self.accumulate(child) 
+                           for child in self.networkplan.get_successors(n)]
+        #                   for child, edge in enumerate(adj_matrix[n, :]) 
+        #                   if edge]
         
         if downstream_vars:
             # Aggreagte all the variables that were found downstream
@@ -176,9 +202,10 @@ class Sequencer(object):
             # Pull out the aggregated values
             demand += agg_downstream['demand']
             cost += agg_downstream['cost']
+        """
 
         # Return a dictionary of accumulated values
-        return {'demand': demand, 'cost': cost}
+        return self.accumulate.cache[n]
 
     def output(self, path):
 
@@ -250,7 +277,7 @@ class Sequencer(object):
             nx.set_edge_attributes(self.networkplan.network, attr, pd.DataFrame(edges).ix[attr].to_dict())
 
     def parent(self, n):
-        parent = (parent for parent, edge in enumerate(self.networkplan.adj_matrix[:, n]) if edge)
+        parent = (parent for parent in self.networkplan.get_predecessors(n))
         # Fake nodes will have no parent
         return next(parent, None)
 
