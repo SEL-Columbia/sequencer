@@ -12,16 +12,7 @@ import copy
 
 from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
 
-
-logger = logging.getLogger('NetworkPlan')
-logger.setLevel(logging.INFO)
-    
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
+logger = logging.getLogger('sequencer')
 
 class NetworkPlan(object):
     """
@@ -203,15 +194,15 @@ class NetworkPlan(object):
         Builds a nested dict of downstream nodes for input node n
         """
 
-        # instantiate adj_matrix once to be passed to helper by
-        # reference 
-        adj_matrix = self.adj_matrix
-        return self._downstream_helper(n, adj_matrix)
+        return self._downstream_helper(n)
 
-    def _downstream_helper(self, n, adj_matrix):
-        """recursively builds a dictionary of child nodes from the input node"""
-        children = [self._downstream_helper(node, adj_matrix) for node, edge in 
-                    enumerate(adj_matrix[n, :]) if edge]
+    def _downstream_helper(self, n):
+        """
+        recursively builds a dictionary of child nodes from the input node
+        
+        """
+        children = [self._downstream_helper(node) 
+                    for node in self.get_successors(n)]
         return {n : children} if children else {n : []}
 
     def root_child_dict(self):
@@ -237,10 +228,19 @@ class NetworkPlan(object):
         for sub in self.subgraphs:
             yield sub
 
+    def get_predecessors(self, n):
+        """wrap networkx call"""
+        return self._network.predecessors(n)
+
+    def get_successors(self, n):
+        """wrap networkx call"""
+        return self._network.successors(n)
+
     def network_to_dict(self):
         """returns a dictionary representation of the full graph"""
         return reduce(lambda x,y: x.update(y) or x, 
                       [self.downstream(root) for root in self.roots])         
+
     @property
     def roots(self):
         return [n for n, k in self.network.in_degree().iteritems() if k == 0]
@@ -253,7 +253,7 @@ class NetworkPlan(object):
     @property
     def adj_matrix(self):
         """returns the matrix representation of the graph"""
-        return nx.adj_matrix(self.network).toarray()
+        return nx.adj_matrix(self.network)
     
     @property
     def network(self):
