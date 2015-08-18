@@ -10,14 +10,7 @@ import sys
 import logging
 from sequencer.Utils import parse_cols
 
-logger = logging.getLogger('Sequencer  ')
-logger.setLevel(logging.INFO)
-    
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+logger = logging.getLogger('sequencer')
 
 def memoize(f):
     cache = {}
@@ -157,7 +150,10 @@ class Sequencer(object):
     
     @memoize
     def accumulate(self, n):
-        """traverses the tree computing downstream aggregates"""
+        """
+        traverses the tree computing downstream aggregates and
+        populating the cache
+        """
 
         # Compute individual node variables
         demand = self.networkplan.metrics['nodal_demand'].ix[n]
@@ -166,8 +162,9 @@ class Sequencer(object):
         post_order_stack = []
         # create a post_order_traversal of downstream tree
         # then sum up accumulated values as we pop off 
-        # un-ravel recursiveness since for large networks we hit a limit
-        # works recursive like with all_children acting like a stack
+        # un-ravel recursiveness since for large networks we hit a stack limit
+        # 
+        # Populate the stack 
         all_children = [(n, child) for child in self.networkplan.get_successors(n)]
         self.accumulate.cache[n] = {'demand': demand, 'cost': cost}
         while all_children:
@@ -178,7 +175,7 @@ class Sequencer(object):
             post_order_stack.append((parent, child))
             all_children += [(child, child_child) for child_child in self.networkplan.get_successors(child)]
 
-        # now we have post_order_stack defined, pop it and populate cache back up the tree
+        # now we have post_order_stack defined, pop it and sum cache back up the tree
         while post_order_stack:
             parent, child = post_order_stack.pop()
         
@@ -186,24 +183,7 @@ class Sequencer(object):
             self.accumulate.cache[parent]['demand'] += self.accumulate.cache[child]['demand']
             self.accumulate.cache[parent]['cost'] += self.accumulate.cache[child]['cost']
 
-            demand += child_demand
-            cost += child_cost
         
-        """
-        # Compute the above variables for all child nodes
-        downstream_vars = [self.accumulate(child) 
-                           for child in self.networkplan.get_successors(n)]
-        #                   for child, edge in enumerate(adj_matrix[n, :]) 
-        #                   if edge]
-        
-        if downstream_vars:
-            # Aggreagte all the variables that were found downstream
-            agg_downstream = {k:sum(d[k] for d in downstream_vars) for k in downstream_vars[0]}  
-            # Pull out the aggregated values
-            demand += agg_downstream['demand']
-            cost += agg_downstream['cost']
-        """
-
         # Return a dictionary of accumulated values
         return self.accumulate.cache[n]
 

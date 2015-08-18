@@ -3,13 +3,20 @@ from setuptools import setup
 with open('requirements.txt') as f:
     required = list(f.read().splitlines())
 
+# Parse the version from the fiona module.
+with open('sequencer/__init__.py') as f:
+    for line in f:
+        if line.find("__version__") >= 0:
+            version = line.split("=")[1].strip()
+            version = version.strip('"')
+            version = version.strip("'")
+            continue
+
 setup(
     # Application name:
     name="Sequencer",
 
-    # Version number (initial):
-    version="0.0.3",
-
+    version=version,
     # Application author details:
     author="Brandon Ogle",
 

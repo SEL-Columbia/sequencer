@@ -12,16 +12,7 @@ import copy
 
 from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
 
-
-logger = logging.getLogger('NetworkPlan')
-logger.setLevel(logging.INFO)
-    
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s : %(name)s [%(levelname)s] : %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
-
+logger = logging.getLogger('sequencer')
 
 class NetworkPlan(object):
     """
