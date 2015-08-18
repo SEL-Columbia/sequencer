@@ -22,18 +22,22 @@ def memoize(f):
         
     @wraps(f)
     def memoizedFunction(*args, **kwargs):
-        if args not in cache:
-            cache[args] = f(*args, **kwargs)
+        # Note:  only concerned with 2nd argument here
+        # since it's only used in accumulate
+        self = args[0]
+        key = args[1]
+        if key not in cache:
+            cache[key] = f(*args, **kwargs)
 
             # Get the number of keys in the the cache and send to the progress meter
             if len(cache.keys()) != scope.last_prog:
                 scope.last_prog = len(cache.keys())
-                if args[0]._progress_meter(scope.last_prog) == 1:
+                if self._progress_meter(scope.last_prog) == 1:
                     # If the progress meter is already shown to be complete
                     # Go to next line in console                
                     sys.stdout.write('\n')
             
-        return cache[args]
+        return cache[key]
 
     # Assigns a cache to the decorated func
     memoizedFunction.cache = cache
@@ -90,8 +94,7 @@ class Sequencer(object):
             for item in network.pop(choice):
                 network.update(item) 
             
-            sys.stdout.write('\r')
-            sys.stdout.write('Solving Frontier of n = {}'.format(len(frontier)))
+            sys.stdout.write('Solving Frontier of n = {}\n'.format(len(frontier)))
             sys.stdout.flush()
 
             # Update the frontier
@@ -263,7 +266,7 @@ class Sequencer(object):
 
     def _progress_meter(self, progress):
         # Clear the line
-        sys.stdout.write('\r')
+        sys.stdout.write('\n')
         
         # Divide the sequence progress by the number of nodes in the network minus the fakes
         completed = 1.0 * progress / len(self.networkplan.network.nodes())
