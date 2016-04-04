@@ -73,15 +73,13 @@ class NetworkPlan(object):
     def _distance_matrix(self):
         """Returns the computed distance matrix"""
 
-        # Determine the type of distance measure based on the input projections
-        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
         # Log the type of metric being used in Sequencing
-        logger.info('Using {} Distance'.format(measure))
+        logger.info('Using {} Distance'.format(self.measure))
 
         # Convert the nodal coordinate tuples to a np.array
         coords = np.vstack(map(np.array, self.coords.values()))
         
-        if measure == 'haversine':
+        if self.measure == 'haversine':
             # Partially applied haversine function that takes a coord and computes the vector distances for all coords
             haversine = lambda coord: get_hav_distance(coords[:, 0], coords[:, 1], *coord) 
             # Map the partially applied function over all coordinates, and stack to a matrix
@@ -114,8 +112,13 @@ class NetworkPlan(object):
                     raise AssertionError("csv and shapefile Projections Don't Match")
 
         # Save the state of the projection
-        self.proj = shapefile.crs['proj']
-    
+        # self.proj = shapefile.crs['proj']
+        # Determine the type of distance measure based on the input projections
+        # measure = 'euclidean' if self.proj == 'utm' else 'haversine'
+        from geometryIO import load
+        proj4 = load(shp)[0]
+        self.measure = 'haversine' if 'longlat' in proj4 else 'euclidean'
+
     def assert_is_tree(self):
 
         in_degree = self.network.in_degree()

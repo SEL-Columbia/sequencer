@@ -1,11 +1,22 @@
 from sequencer import NetworkPlan
 from sequencer.Models import EnergyMaximizeReturn
 
-csv = '/Users/blogle/Downloads/3305/metrics-local.csv'
-shp = '/Users/blogle/Downloads/3305/networks-proposed.shp'
+from os.path import join
+source_folder = 'data/sumaila/input'
+
+csv = join(source_folder, 'metrics-local.csv')
+shp = join(source_folder, 'networks-proposed.shp')
 
 nwp = NetworkPlan(shp, csv, prioritize='Population')
 model = EnergyMaximizeReturn(nwp)
 
 results = model.sequence()
-model.output('/Users/blogle/Desktop/output/')
+target_folder = 'xyz'
+
+from os import makedirs
+try:
+    makedirs(target_folder)
+except OSError:
+    pass
+
+model.output(target_folder)
