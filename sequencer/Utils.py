@@ -51,6 +51,9 @@ def prep_data(network, metrics, loc_tol=.5):
     # now that we have identical metric coords in both node_df and metrics join on that column
     metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort()
 
+    # !!! If we were storing both nodes and edges in the same structure,
+    # we would not have to deal with this
+
     #drop duplicate matches
     find_closest = lambda x: x.index[np.argmin(hav_dist(np.vstack(x['coords']), x.name))]
     closest_match = metrics.ix[metrics.groupby('m_coords').apply(find_closest).values]
