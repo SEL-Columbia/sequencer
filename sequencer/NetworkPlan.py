@@ -35,15 +35,19 @@ class NetworkPlan(object):
         self.shp_p, self.csv_p = shp, csv
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
 
-        logger.info('Asserting Input Projections Match')
-        self._assert_proj_match(shp, csv)
+        # logger.info('Asserting Input Projections Match')
+        # self._assert_proj_match(shp, csv)
+
+        from geometryIO import load
+        proj4 = load(shp)[0]
+        self.measure = 'haversine' if 'longlat' in proj4 else 'euclidean'
 
         # Load in and align input data
         logger.info('Aligning Network Nodes With Input Metrics')
         self._network, self._metrics = prep_data( nx.read_shp(shp),
-                                                  pd.read_csv(csv, header=1),
-                                                  loc_tol = self.TOL
-                                                )
+                                                  # pd.read_csv(csv, header=1),
+                                                  pd.read_csv(csv),
+                                                  loc_tol = self.TOL)
 
         logger.info('Computing Pairwise Distances')
         self.distance_matrix = self._distance_matrix()
