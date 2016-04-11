@@ -32,10 +32,10 @@ def memoize(f):
             # Get the number of keys in the the cache and send to the progress meter
             if len(cache.keys()) != scope.last_prog:
                 scope.last_prog = len(cache.keys())
-                if self._progress_meter(scope.last_prog) == 1:
+                # if self._progress_meter(scope.last_prog) == 1:
                     # If the progress meter is already shown to be complete
                     # Go to next line in console                
-                    sys.stdout.write('\n')
+                    # sys.stdout.write('\n')
             
         return cache[key]
 
@@ -94,8 +94,8 @@ class Sequencer(object):
             for item in network.pop(choice):
                 network.update(item) 
             
-            sys.stdout.write('Solving Frontier of n = {}\n'.format(len(frontier)))
-            sys.stdout.flush()
+            # sys.stdout.write('Solving Frontier of n = {}\n'.format(len(frontier)))
+            # sys.stdout.flush()
 
             # Update the frontier
             frontier = network.keys()
@@ -276,7 +276,7 @@ class Sequencer(object):
 
     def _progress_meter(self, progress):
         # Clear the line
-        sys.stdout.write('\n')
+        # sys.stdout.write('\n')
         
         # Divide the sequence progress by the number of nodes in the network minus the fakes
         completed = 1.0 * progress / len(self.networkplan.network.nodes())
@@ -288,10 +288,12 @@ class Sequencer(object):
         # If the percentage is greater than 50% update the ticks after the percentage 
         after  = ''.join('##' if int(meter_ticks) >= x else '  ' for x in np.arange(52.5, 100, 2.5))
         # Update the progress bar
+        """
         sys.stdout.write('[{b} {prog:.2f}% {a}]'.format(b    = before, 
                                                	        prog = np.around(meter_ticks, 2), 
                                               	        a    = after))
         sys.stdout.flush()
+        """
         
         return completed
     
