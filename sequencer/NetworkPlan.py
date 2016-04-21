@@ -45,6 +45,8 @@ class NetworkPlan(object):
                                                   loc_tol = self.TOL
                                                 )
 
+        self.coord_values = self.coords.values()
+
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
         
@@ -144,20 +146,28 @@ class NetworkPlan(object):
         else:
             return self.metrics[self.priority_metric].ix[nodes].idxmax()
 
-    def _weight_edges(self):
-        """Set the edge weights in the graph using a distance function."""
-        weights = {}
+    def _distance(self, first_index, second_index):
+        """Calculate the distance between two points given their indices."""
         distance_function = (
             euclidean_distance if self.proj == 'utm' else haversine_distance
         )
-        logger.info('Using {} distance'.format(distance_function.__name__))
+        return distance_function(
+            self.coord_values[first_index], self.coord_values[second_index]
+        )
+
+    def _weight_edges(self):
+        """Set the edge weights in the graph using a distance function."""
+        weights = {}
+        logger.info('Using {} distance'.format(
+            'euclidean' if self.proj == 'utm' else 'haversine'
+        ))
 
         # A list of (lat, lon) for all the points
         coords = self.coords.values()
 
         no_bad_edges_found = True
         for edge in self.network.edges():
-            distance = distance_function(coords[edge[0]], coords[edge[1]])
+            distance = self._distance(edge[0], edge[1])
             if no_bad_edges_found and distance < self.TOL:
                 no_bad_edges_found = False
                 logger.error(

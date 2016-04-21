@@ -128,7 +128,7 @@ class Sequencer(object):
         """Computes the edge distance from a node to it's parent"""
         parent = self.parent(node)
         if parent != None:
-            return self.networkplan.distance_matrix[parent, node]
+            return self.networkplan._distance(parent, node)
         return 0.0
 
     def sequence(self):
@@ -238,7 +238,7 @@ class Sequencer(object):
             if not np.isnan(fnode):
                 # Set the edge attributes with those found in sequencing
                 self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
-                self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
+                self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan._distance(fnode, tnode))
                 self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
                 fnode_coords = self.networkplan.coords[fnode]
                 tnode_coords = self.networkplan.coords[tnode]
