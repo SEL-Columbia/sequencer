@@ -96,6 +96,23 @@ def get_hav_distance(lat, lon, pcode_lat, pcode_lon):
     earth_radius =  6371010 # meters
     return haversine_angle * earth_radius
 
+def haversine_distance(first_point, second_point):
+    """Calculate the Haversine distance between two points on Earth."""
+    # Implementation details copied from scikit-learn
+    # http://scikit-learn.org/
+    # 0.17/modules/generated/sklearn.neighbors.DistanceMetric.html
+    #
+    # https://github.com/scikit-learn/scikit-learn/blob
+    # /a0b8c5291901bc28666bf6486babbfc584cea49c/sklearn/neighbors
+    # /dist_metrics.pyx#L992-L1000
+    p1 = np.radians(first_point)
+    p2 = np.radians(second_point)
+    sin0 = np.sin(0.5 * (p1[0] - p2[0]))
+    sin1 = np.sin(0.5 * (p1[1] - p2[1]))
+    return 2 * 6371010 * np.arcsin(np.sqrt(
+        sin0 * sin0 + np.cos(p1[0]) * np.cos(p2[0]) * sin1 * sin1
+    ))
+
 def get_euclidean_dist(point, coords):
     return np.sqrt(np.sum((coords - point) ** 2, axis=1))
 
