@@ -10,7 +10,7 @@ import pandas as pd
 import logging
 import copy
 
-from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
+from sequencer.Utils import prep_data, haversine_distance, euclidean_distance
 
 logger = logging.getLogger('sequencer')
 
@@ -45,15 +45,6 @@ class NetworkPlan(object):
                                                   loc_tol = self.TOL
                                                 )
 
-        logger.info('Computing Pairwise Distances')
-        self.distance_matrix = self._distance_matrix()
-         
-        if len(self.distance_matrix[(self.distance_matrix > 0) & (self.distance_matrix < self.TOL)]) > 0:
-            logger.error("""Dataset Contains Edges, Less Than {tolerance} Meters! 
-                          This can result in incorrect alignment of metrics and network, 
-                          where fake nodes are incorrectly assigned metrics. 
-                          This error is resolved by buffering your input data.""".format(tolerance=self.TOL))
-
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
         
@@ -70,29 +61,6 @@ class NetworkPlan(object):
         #Fillna values with Zero
         self._metrics = self.metrics.fillna(0)
 
-    def _distance_matrix(self):
-        """Returns the computed distance matrix"""
-
-        # Determine the type of distance measure based on the input projections
-        measure = 'euclidean' if self.proj == 'utm' else 'haversine'
-        # Log the type of metric being used in Sequencing
-        logger.info('Using {} Distance'.format(measure))
-
-        # Convert the nodal coordinate tuples to a np.array
-        coords = np.vstack(map(np.array, self.coords.values()))
-        
-        if measure == 'haversine':
-            # Partially applied haversine function that takes a coord and computes the vector distances for all coords
-            haversine = lambda coord: get_hav_distance(coords[:, 0], coords[:, 1], *coord) 
-            # Map the partially applied function over all coordinates, and stack to a matrix
-            return np.vstack(map(haversine, coords))
-
-        # Partially applied haversine function that takes a coord and computes the vector distances for all coords
-        euclidean = lambda coord: get_euclidean_dist(coords, coord)
-        # Map the partially applied function over all coordinates, and stack to a matrix
-        return np.vstack(map(euclidean, coords))
-    
-    
     def _assert_proj_match(self, shp, csv):
         """Ensure that the projections match before continuing"""
         # Use fiona to open the shapefile as this includes the projection type
@@ -177,10 +145,29 @@ class NetworkPlan(object):
             return self.metrics[self.priority_metric].ix[nodes].idxmax()
 
     def _weight_edges(self):
-        """sets the edge weights in the graph using the distance matrix"""
+        """Set the edge weights in the graph using a distance function."""
         weights = {}
+        distance_function = (
+            euclidean_distance if self.proj == 'utm' else haversine_distance
+        )
+        logger.info('Using {} distance'.format(distance_function.__name__))
+
+        # A list of (lat, lon) for all the points
+        coords = self.coords.values()
+
+        no_bad_edges_found = True
         for edge in self.network.edges():
-            weights[edge] = self.distance_matrix[edge]
+            distance = distance_function(coords[edge[0]], coords[edge[1]])
+            if no_bad_edges_found and distance < self.TOL:
+                no_bad_edges_found = False
+                logger.error(
+                    'Dataset contains edges less than {tolerance} meters! This'
+                    ' can result in incorrect alignment of metrics and'
+                    ' network, where fake nodes are incorrectly assigned'
+                    'metrics. This error is resolved by buffering your input'
+                    ' data.'.format(tolerance=self.TOL)
+                )
+            weights[edge] = distance
         nx.set_edge_attributes(self.network, 'weight', weights)
     
     def direct_network(self):
