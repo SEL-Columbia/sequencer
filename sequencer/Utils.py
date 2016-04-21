@@ -113,6 +113,11 @@ def haversine_distance(first_point, second_point):
         sin0 * sin0 + np.cos(p1[0]) * np.cos(p2[0]) * sin1 * sin1
     ))
 
+def euclidean_distance(first_point, second_point):
+    """Calculate the Euclidean distance between two points."""
+    # http://stackoverflow.com/a/1401828
+    return np.linalg.norm((first_point, second_point))
+
 def get_euclidean_dist(point, coords):
     return np.sqrt(np.sum((coords - point) ** 2, axis=1))
 
