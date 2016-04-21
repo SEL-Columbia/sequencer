@@ -162,9 +162,6 @@ class NetworkPlan(object):
             'euclidean' if self.proj == 'utm' else 'haversine'
         ))
 
-        # A list of (lat, lon) for all the points
-        coords = self.coords.values()
-
         no_bad_edges_found = True
         for edge in self.network.edges():
             distance = self._distance(edge[0], edge[1])
