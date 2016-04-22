@@ -52,7 +52,7 @@ class TestNetworkPlan(NetworkPlan):
         self._metrics, self._network = gen_data()
         self.proj = 'wgs4'
         self.priority_metric = 'Population'
-        self.distance_matrix = self._distance_matrix()
+        self.coord_values = self.coords.values()
         
         # Set the edge weight to the distance between those nodes                                                                                                             
         self._weight_edges()
@@ -106,7 +106,7 @@ def test_accumulate_cost():
     # Build dictionary of accumulated values for each node
     acc_dicts = {node : TestSequencer(nwp).accumulate(node) for node in nwp.network.node.keys()}
     def get_distance(f, t):
-        return nwp.distance_matrix[f][t]
+        return nwp._distance(f, t)
 
     # Manually compute downstream distances
     costs = {0 : sum([get_distance(0, 1), get_distance(0, 2), 
@@ -129,10 +129,12 @@ def test_sequencer_follows_topology():
     model = TestSequencer(nwp)
     results = model.sequence()
     fnodes = results['Sequence..Upstream.id']
-    tnodes = results['Sequence..Root.vertex.id']
+    node_seq_num = {node: seq_num for seq_num, node in 
+                    results['Sequence..Vertex.id'].iteritems()}
 
     #For each from_node, assert that the sequencer has already pointed to it or its a root
-    eq_(np.all([fnode in nwp.roots or fnode in tnodes.ix[:i-1] for i, fnode in fnodes.iterkv()]), True)
+    eq_(np.all([fnode in nwp.roots or node_seq_num[fnode] < seq_num 
+                for seq_num, fnode in fnodes.iteritems()]), True)
 
 
 def test_sequencer_compare():

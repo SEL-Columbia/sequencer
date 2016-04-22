@@ -236,6 +236,14 @@ You'll need the python2.7 based install available [here](https://www.continuum.i
 
 You'll need to make sure anaconda is in your PATH before running conda commands.  
 
+### For running
+
+Setting up Sequencer for running (i.e. not for development) can be done via:
+```bash
+conda create -n [your env] -c sel sequencer
+```
+
+### For development
 You can easily create a new env with the listed packages by running
 ```bash
 conda create -n [your env] --file requirements.txt python=2.7
@@ -250,5 +258,3 @@ and built with
 ```bash 
 conda install -c https://conda.binstar.org/mhworth pygraphviz  
 ```
-
-
