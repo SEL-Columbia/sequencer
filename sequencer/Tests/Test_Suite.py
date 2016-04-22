@@ -129,10 +129,12 @@ def test_sequencer_follows_topology():
     model = TestSequencer(nwp)
     results = model.sequence()
     fnodes = results['Sequence..Upstream.id']
-    tnodes = results['Sequence..Root.vertex.id']
+    node_seq_num = {node: seq_num for seq_num, node in 
+                    results['Sequence..Vertex.id'].iteritems()}
 
     #For each from_node, assert that the sequencer has already pointed to it or its a root
-    eq_(np.all([fnode in nwp.roots or fnode in tnodes.ix[:i-1] for i, fnode in fnodes.iterkv()]), True)
+    eq_(np.all([fnode in nwp.roots or node_seq_num[fnode] < seq_num 
+                for seq_num, fnode in fnodes.iteritems()]), True)
 
 
 def test_sequencer_compare():
