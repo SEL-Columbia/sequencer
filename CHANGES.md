@@ -1,3 +1,8 @@
+## 0.0.6
+- Removed pairwise distance matrix in favor of computing distances per edge
+- Memory consumption reduced from O(n^2) to O(n)
+- Issues addressed:  #50
+
 ## 0.0.5
 
 - Performance improvements:
