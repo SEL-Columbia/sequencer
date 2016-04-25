@@ -236,6 +236,8 @@ class Sequencer(object):
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
             if not np.isnan(fnode):
+                if np.any(np.mod([fnode, tnode], 1) != 0):
+                    raise Exception('Non-integral node index in results.')
                 # Set the edge attributes with those found in sequencing
                 self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
                 self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan._distance(fnode, tnode))
