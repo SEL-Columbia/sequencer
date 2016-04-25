@@ -45,7 +45,7 @@ class NetworkPlan(object):
                                                   loc_tol = self.TOL
                                                 )
 
-        self.coord_values = self.coords.values()
+        self.coord_values = np.array(self.coords.values())
 
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
