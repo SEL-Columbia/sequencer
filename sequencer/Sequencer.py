@@ -289,7 +289,10 @@ class Sequencer(object):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
         
         logger.info('Joining Sequencer Results on Input Metrics')
-        
+        if not hasattr(self.networkplan, 'csv_p'):
+            logger.info('no original csv file found, skipping')
+            return
+
         orig = pd.read_csv(self.networkplan.csv_p, header=1)
         orig.columns = parse_cols(orig)
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
