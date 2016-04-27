@@ -19,31 +19,27 @@ class NetworkPlan(object):
     NetworkPlan containing NetworkPlanner proposed network and 
     accompanying nodal metrics
     
-    Parameters
-    ----------
-    shp : file or string (File, directory, or filename to read).
-    csv : string or file handle / StringIO.
-    
-    Example
-    ----------
-    NetworkPlan('/Users/blogle/Downloads/1643/networks-proposed.shp', 
-                '/Users/blogle/Downloads/1643/metrics-local.csv')
     """
     TOL = .5 # meters at the equator, tolerance is stricter towards the poles
 
-    def __init__(self, shp, csv, **kwargs):
-        self.shp_p, self.csv_p = shp, csv
+    def __init__(self, network, metrics, **kwargs):
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
+        self.proj = kwargs['proj'] if 'proj' in kwargs else 'utm'
 
-        logger.info('Asserting Input Projections Match')
-        self._assert_proj_match(shp, csv)
+        # do the real init
+        self._init_helper(network, metrics)
+
+
+    def _init_helper(self, network, metrics):
+        """
+        re-usable init bypassing read shp,csv
+        """
 
         # Load in and align input data
         logger.info('Aligning Network Nodes With Input Metrics')
-        self._network, self._metrics = prep_data( nx.read_shp(shp),
-                                                  pd.read_csv(csv, header=1),
-                                                  loc_tol = self.TOL
-                                                )
+        self._network, self._metrics = prep_data(network, 
+                                                 metrics, 
+                                                 loc_tol = self.TOL)
 
         self.coord_values = np.array(self.coords.values())
 
@@ -63,6 +59,40 @@ class NetworkPlan(object):
         #Fillna values with Zero
         self._metrics = self.metrics.fillna(0)
 
+
+    @classmethod 
+    def from_files(cls, shp, csv, **kwargs):
+        """
+        Parameters
+        ----------
+        shp : file or string (File, directory, or filename to read).
+        csv : string or file handle / StringIO.
+        
+        Example
+        ----------
+        NetworkPlan.from_files('networks-proposed.shp', 
+                               'metrics-local.csv')
+        """
+
+        logger.info('Asserting Input Projections Match')
+
+        cls._assert_proj_match(shp, csv)
+        # Use fiona to open the shapefile as this includes the projection type
+        
+        shapefile = fiona.open(shp)
+        # Pass along the projection
+        kwargs['proj'] = shapefile.crs['proj']
+ 
+        nwp = cls(nx.read_shp(shp), pd.read_csv(csv, header=1), **kwargs)
+
+        # FIXME:  
+        # This is a really bad way to do this...the sequencer has a dependency
+        # on the csv_p attribute (i.e. the original csv) so leave it for now
+        nwp.csv_p = csv
+        return nwp
+
+
+    @classmethod
     def _assert_proj_match(self, shp, csv):
         """Ensure that the projections match before continuing"""
         # Use fiona to open the shapefile as this includes the projection type
@@ -83,9 +113,8 @@ class NetworkPlan(object):
                     logger.error("csv and shp Projections Don't Match")
                     raise AssertionError("csv and shapefile Projections Don't Match")
 
-        # Save the state of the projection
-        self.proj = shapefile.crs['proj']
-    
+
+   
     def assert_is_tree(self):
 
         in_degree = self.network.in_degree()
@@ -322,4 +351,4 @@ def download_scenario(scenario_number, directory_name=None, username=None, passw
     csv = os.path.join(directory_name, 'metrics-local.csv')
     shp = os.path.join(directory_name, 'network-proposed.shp')
 
-    return NetworkPlan(shp, csv)
+    return NetworkPlan.from_files(shp, csv)

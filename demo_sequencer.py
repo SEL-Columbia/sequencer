@@ -1,11 +1,11 @@
 from sequencer import NetworkPlan
 from sequencer.Models import EnergyMaximizeReturn
 
-csv = '/Users/blogle/Downloads/3305/metrics-local.csv'
-shp = '/Users/blogle/Downloads/3305/networks-proposed.shp'
+csv = 'data/sumaila/input/metrics-local.csv'
+shp = 'data/sumaila/input/networks-proposed.shp'
 
-nwp = NetworkPlan(shp, csv, prioritize='Population')
+nwp = NetworkPlan.from_files(shp, csv, prioritize='Population')
 model = EnergyMaximizeReturn(nwp)
 
 results = model.sequence()
-model.output('/Users/blogle/Desktop/output/')
+model.output('output')
