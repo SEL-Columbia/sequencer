@@ -132,8 +132,7 @@ class Sequencer(object):
         return 0.0
 
     def sequence(self):
-        self.results = pd.DataFrame(self._sequence()).set_index('Sequence..Far.sighted.sequence')
-        
+        self.results = pd.DataFrame(self._sequence(), dtype=object).set_index('Sequence..Far.sighted.sequence')
         # Post process for output
         self._build_node_wkt()
         self._build_edge_wkt()
@@ -235,7 +234,9 @@ class Sequencer(object):
         r = self.results
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
-            if not np.isnan(fnode):
+            if fnode:
+                if np.any(np.mod([fnode, tnode], 1) != 0):
+                    raise Exception('Non-integral node index in results.')
                 # Set the edge attributes with those found in sequencing
                 self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
                 self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan._distance(fnode, tnode))
@@ -289,8 +290,8 @@ class Sequencer(object):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
         
         logger.info('Joining Sequencer Results on Input Metrics')
-        
-        orig = pd.read_csv(self.networkplan.csv_p, header=1)
+        # FIXME:  Remove this dependency on original_metrics
+        orig = self.networkplan.original_metrics
         orig.columns = parse_cols(orig)
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')

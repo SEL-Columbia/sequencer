@@ -7,6 +7,7 @@ import networkx as nx
 import numpy as np
 from numpy import sin, cos, pi, arcsin, sqrt
 import string
+import collections
 
 def prep_data(network, metrics, loc_tol=.5):
     """
@@ -15,7 +16,12 @@ def prep_data(network, metrics, loc_tol=.5):
     """  
 
     # convert the node names from coords to integers, cache the coords as attrs
-    network = nx.convert_node_labels_to_integers(network, label_attribute='coords')
+    # but ONLY if the nodes are themselves collections (which is the default for
+    # networkx shapefile import)
+    # otherwise, assume the coords attribute exists
+    if(len(network.nodes()) > 0 and
+       isinstance(network.nodes()[0], collections.Iterable)):
+        network = nx.convert_node_labels_to_integers(network, label_attribute='coords')
     
     # convert special characters to dot notation 
     metrics.columns = parse_cols(metrics)
@@ -28,7 +34,6 @@ def prep_data(network, metrics, loc_tol=.5):
     
     # cast coords to tuples (hashable)
     node_df['coords'] = node_df['coords'].apply(tuple)
-    metrics['m_coords'] = metrics['m_coords'].apply(tuple)
     
     # build a vector of all the coordinates in the metrics dataframe
     coords_vec = np.vstack(metrics['m_coords'].values)
@@ -46,7 +51,6 @@ def prep_data(network, metrics, loc_tol=.5):
     
     # cast the coordinates back to tuples (hashable) 
     node_df['m_coords'] = node_df['m_coords'].apply(tuple)
-    metrics['m_coords'] = metrics['m_coords'].apply(tuple)
     
     # now that we have identical metric coords in both node_df and metrics join on that column
     metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort()
