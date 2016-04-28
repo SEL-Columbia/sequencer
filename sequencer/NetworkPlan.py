@@ -4,8 +4,6 @@ __author__ = 'Brandon Ogle'
 import fiona
 import numpy as np
 import networkx as nx
-from scipy.sparse import csr_matrix
-import scipy.sparse.csgraph as graph
 import pandas as pd
 import logging
 import copy
@@ -26,13 +24,18 @@ class NetworkPlan(object):
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
         self.proj = kwargs['proj'] if 'proj' in kwargs else 'utm'
 
-        # do the real init
+        # FIXME:
+        # Remove the dependency that sequencer has on the
+        # original metrics file (this is terrible coupling)
+        # see sequencer:_clean_results()
+        self._original_metrics = metrics
+        
         self._init_helper(network, metrics)
 
 
     def _init_helper(self, network, metrics):
         """
-        re-usable init bypassing read shp,csv
+        All initialization (cleaning up metrics, network, etc)
         """
 
         # Load in and align input data
@@ -41,7 +44,7 @@ class NetworkPlan(object):
                                                  metrics, 
                                                  loc_tol = self.TOL)
 
-        self.coord_values = np.array(self.coords.values())
+        self.coord_values = self.coords.values()
 
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
@@ -83,14 +86,7 @@ class NetworkPlan(object):
         # Pass along the projection
         kwargs['proj'] = shapefile.crs['proj']
  
-        nwp = cls(nx.read_shp(shp), pd.read_csv(csv, header=1), **kwargs)
-
-        # FIXME:  
-        # This is a really bad way to do this...the sequencer has a dependency
-        # on the csv_p attribute (i.e. the original csv) so leave it for now
-        nwp.csv_p = csv
-        return nwp
-
+        return cls(nx.read_shp(shp), pd.read_csv(csv, header=1), **kwargs)
 
     @classmethod
     def _assert_proj_match(self, shp, csv):
@@ -284,10 +280,14 @@ class NetworkPlan(object):
         return self._network
     
     @property
+    def original_metrics(self):
+        """returns the original (unprocessed) metrics data_frame"""
+        return self._original_metrics
+
+    @property
     def metrics(self):
         """returns the nodal metrics Pandas DataFrame"""
         return self._metrics
-
 
 def download_scenario(scenario_number, directory_name=None, username=None, password=None,
                       np_url='http://networkplanner.modilabs.org/'):
