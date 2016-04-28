@@ -133,7 +133,7 @@ def test_sequencer_with_fakes():
 class TestNetworkPlan(NetworkPlan):
     
     def __init__(self):
-        self._metrics, self._network = gen_data()
+        self.metrics, self.network = gen_data()
         self.proj = 'wgs4'
         self.priority_metric = 'Population'
         self.coord_values = self.coords.values()
@@ -148,7 +148,7 @@ class TestNetworkPlan(NetworkPlan):
         self.fake_nodes = [0]
 
         # Fillna with 0
-        self._metrics = self.metrics.fillna(0)
+        self.metrics = self.metrics.fillna(0)
 
 class TestSequencer(Sequencer):
     

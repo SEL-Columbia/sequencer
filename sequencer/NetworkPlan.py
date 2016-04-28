@@ -24,11 +24,12 @@ class NetworkPlan(object):
         self.priority_metric = kwargs.get('prioritize', 'population')
         self.proj = kwargs.get('proj', 'utm')
 
+        # original_metrics is the unprocessed metrics DataFrame
         # FIXME:
         # Remove the dependency that sequencer has on the
         # original metrics file (this is terrible coupling)
         # see sequencer:_clean_results()
-        self._original_metrics = metrics
+        self.original_metrics = metrics
         
         self._init_helper(network, metrics)
 
@@ -40,9 +41,12 @@ class NetworkPlan(object):
 
         # Load in and align input data
         logger.info('Aligning Network Nodes With Input Metrics')
-        self._network, self._metrics = prep_data(network, 
-                                                 metrics, 
-                                                 loc_tol = self.TOL)
+
+        # network is the DiGraph Object representation of the graph
+        # metrics is the nodal metrics Pandas DataFrame
+        self.network, self.metrics = prep_data(network,
+                                               metrics,
+                                               loc_tol = self.TOL)
 
         self.coord_values = self.coords.values()
 
@@ -60,7 +64,7 @@ class NetworkPlan(object):
         self.fake_nodes = self.fakes(self.metrics.index)
 
         #Fillna values with Zero
-        self._metrics = self.metrics.fillna(0)
+        self.metrics = self.metrics.fillna(0)
 
 
     @classmethod 
@@ -206,7 +210,7 @@ class NetworkPlan(object):
         """Decomposes a full graph into its components and directs them away from their roots"""
         #print list(self.get_subgraphs())
         graphs = [self._depth_first_directed(g) for g in self.get_subgraphs()]
-        self._network = reduce(lambda a, b: nx.union(a, b), graphs)
+        self.network = reduce(lambda a, b: nx.union(a, b), graphs)
         
     def downstream(self, n):
         """
@@ -249,11 +253,11 @@ class NetworkPlan(object):
 
     def get_predecessors(self, n):
         """wrap networkx call"""
-        return self._network.predecessors(n)
+        return self.network.predecessors(n)
 
     def get_successors(self, n):
         """wrap networkx call"""
-        return self._network.successors(n)
+        return self.network.successors(n)
 
     def network_to_dict(self):
         """returns a dictionary representation of the full graph"""
@@ -273,21 +277,7 @@ class NetworkPlan(object):
     def adj_matrix(self):
         """returns the matrix representation of the graph"""
         return nx.adj_matrix(self.network)
-    
-    @property
-    def network(self):
-        """returns the DiGraph Object representation of the graph"""
-        return self._network
-    
-    @property
-    def original_metrics(self):
-        """returns the original (unprocessed) metrics data_frame"""
-        return self._original_metrics
 
-    @property
-    def metrics(self):
-        """returns the nodal metrics Pandas DataFrame"""
-        return self._metrics
 
 def download_scenario(scenario_number, directory_name=None, username=None, password=None,
                       np_url='http://networkplanner.modilabs.org/'):
