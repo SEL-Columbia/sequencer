@@ -127,7 +127,7 @@ class Sequencer(object):
     def upstream_distance(self, node):
         """Computes the edge distance from a node to it's parent"""
         parent = self.parent(node)
-        if parent != None:
+        if parent is not None:
             return self.networkplan._distance(parent, node)
         return 0.0
 
@@ -234,7 +234,7 @@ class Sequencer(object):
         r = self.results
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
-            if not fnode == None:
+            if fnode is not None:
                 if np.any(np.mod([fnode, tnode], 1) != 0):
                     raise Exception('Non-integral node index in results.')
                 # Set the edge attributes with those found in sequencing
