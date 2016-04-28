@@ -234,7 +234,7 @@ class Sequencer(object):
         r = self.results
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
-            if fnode:
+            if not fnode == None:
                 if np.any(np.mod([fnode, tnode], 1) != 0):
                     raise Exception('Non-integral node index in results.')
                 # Set the edge attributes with those found in sequencing
