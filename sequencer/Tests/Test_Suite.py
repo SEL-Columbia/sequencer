@@ -46,64 +46,6 @@ def gen_data():
     
     return metrics, network.to_directed()
 
-
-def gen_data_with_fakes():
-    """
-    generate network and metrics where some of the network
-    nodes do not have corresponding metrics records
-    
-    This should be sufficient for tests requiring fake nodes
-
-    network looks like
-
-       o     *
-       |    / \
-       *   *   *
-      / \
-     *   *
-
-    where o is a fake node, * is not
-    """
-  
-    # create disjoint graph with 2 trees, one rooted by a fake node
-    network = nx.graph.Graph()
-    edges = ((0, 1), (0, 2), (3, 4), (3, 5))
-    network.add_edges_from(edges)
-
-    # now add fake root to tree at 3
-    network.add_edge(6, 3)
-
-    # set coordinates
-    base_coord = np.array([10, 10])
-    coord_dict = {i: base_coord + [i*-1, i*-1] for i in range(6)}
-    nx.set_node_attributes(network, 'coords', coord_dict)
-    # and set fake node coordinates
-    nx.set_node_attributes(network, 'coords', {6: np.array([10, 11])})
-
-    # now set the metrics dataframe without the fake node
-    metrics_data = {'Demand...Projected.nodal.demand.per.year': 
-                    [100, 50, 25, 12, 6, 3],
-                    'Population': [100, 50, 25, 12, 6, 3]}
-
-    metrics = DataFrame(metrics_data)
-    metrics['X'] = [ coord_dict[i][0] for i in range(6) ]
-    metrics['Y'] = [ coord_dict[i][1] for i in range(6) ]
-
-    return metrics, network
-            
-def test_sequencer_with_fakes():
-    """
-    Make sure we work with fake nodes
-    """
-    
-    # for now, just make sure it runs without exceptions
-    metrics, network = gen_data_with_fakes()
-    nwp = NetworkPlan(network, metrics, prioritize='Population', proj='wgs4')
-    model = EnergyMaximizeReturn(nwp)
-    model.sequence()
-    #todo:  check the result
-
- 
 class TestNetworkPlan(NetworkPlan):
     
     def __init__(self):
@@ -202,7 +144,7 @@ def test_sequencer_compare():
     input_dir = "data/sumaila/input"
     csv_file = os.path.join(input_dir, "metrics-local.csv")
     shp_file = os.path.join(input_dir, "networks-proposed.shp")
-    nwp = NetworkPlan.from_files(shp_file, csv_file, prioritize='Population')
+    nwp = NetworkPlan(shp_file, csv_file, prioritize='Population')
     model = EnergyMaximizeReturn(nwp)
 
     model.sequence()
