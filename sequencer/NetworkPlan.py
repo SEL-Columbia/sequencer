@@ -22,7 +22,7 @@ class NetworkPlan(object):
 
     def __init__(self, network, metrics, **kwargs):
         self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
-        self.proj = kwargs['proj'] if 'proj' in kwargs else 'utm'
+        self.proj = kwargs.get('proj', 'utm')
 
         # FIXME:
         # Remove the dependency that sequencer has on the
