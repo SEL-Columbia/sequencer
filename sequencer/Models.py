@@ -12,3 +12,5 @@ class EnergyMaximizeReturn(Sequencer):
     def sequence(self):
         super(EnergyMaximizeReturn, self).sequence()
         self._strip_cols()
+        # return to be consistent with parent
+        return self.output_frame
