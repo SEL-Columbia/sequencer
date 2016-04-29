@@ -132,6 +132,12 @@ class Sequencer(object):
         return 0.0
 
     def sequence(self):
+        """
+        Compute the sequence (aka rank) of nodes and edges 
+        
+        This modifies the NetworkPlan member (so make a deep copy if you 
+        need the original)
+        """
         self.results = pd.DataFrame(self._sequence(), dtype=object).set_index('Sequence..Far.sighted.sequence')
         # Post process for output
         self._build_node_wkt()
@@ -235,8 +241,6 @@ class Sequencer(object):
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
             if fnode is not None:
-                if np.any(np.mod([fnode, tnode], 1) != 0):
-                    raise Exception('Non-integral node index in results.')
                 # Set the edge attributes with those found in sequencing
                 self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
                 self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan._distance(fnode, tnode))

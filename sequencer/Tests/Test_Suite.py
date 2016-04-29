@@ -54,15 +54,17 @@ def gen_data_with_fakes():
     
     This should be sufficient for tests requiring fake nodes
 
-    network looks like
+    network looks like (fake node starred, demand in parens)
 
-       o     *
-       |    / \
-       *   *   *
-      / \
-     *   *
+                   6* 
+                   |    
+                   |
+       0(100)      3(12)
+      / \         / \   
+     /   \       /   \  
+    1(50) 2(25) 4(6)  5(3)
 
-    where o is a fake node, * is not
+    Also returns edge_rank:  dict of edge -> rank 
     """
   
     # create disjoint graph with 2 trees, one rooted by a fake node
@@ -73,35 +75,59 @@ def gen_data_with_fakes():
     # now add fake root to tree at 3
     network.add_edge(6, 3)
 
-    # set coordinates
+    # set coordinates (roughly match diagram above)
     base_coord = np.array([10, 10])
-    coord_dict = {i: base_coord + [i*-1, i*-1] for i in range(6)}
-    nx.set_node_attributes(network, 'coords', coord_dict)
-    # and set fake node coordinates
-    nx.set_node_attributes(network, 'coords', {6: np.array([10, 11])})
+    fake_coord = np.array([20, 9])
+    coord_dict = {0: base_coord, 
+                  1: base_coord + [-1, 1], 
+                  2: base_coord + [1, 1], 
+                  3: fake_coord + [0, 1],
+                  4: fake_coord + [-1, 2],
+                  5: fake_coord + [1, 2],
+                  6: fake_coord}
 
+    nx.set_node_attributes(network, 'coords', coord_dict)
     # now set the metrics dataframe without the fake node
     metrics_data = {'Demand...Projected.nodal.demand.per.year': 
                     [100, 50, 25, 12, 6, 3],
                     'Population': [100, 50, 25, 12, 6, 3]}
 
     metrics = DataFrame(metrics_data)
+    # Note, we skip fake node here
     metrics['X'] = [ coord_dict[i][0] for i in range(6) ]
     metrics['Y'] = [ coord_dict[i][1] for i in range(6) ]
-
-    return metrics, network
+    
+    # assign expected ranks to nodes, edges (the sequence) 
+    # note: 
+    # - ranks are 1-based and originally assigned to nodes
+    # - edges are assigned rank based on the "to" node
+    # - fake nodes are skipped when assigning rank
+    # (See Sequencer.sequencer._sequence for details)
+    node_rank = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6}
+    edge_rank = {(0, 1): 2, (0, 2): 3, (6, 3): 4, (3, 4): 5, (3, 5): 6}
+    return metrics, network, node_rank, edge_rank
             
+
 def test_sequencer_with_fakes():
     """
     Make sure we work with fake nodes
     """
     
     # for now, just make sure it runs without exceptions
-    metrics, network = gen_data_with_fakes()
+    metrics, network, node_rank, edge_rank = gen_data_with_fakes()
     nwp = NetworkPlan(network, metrics, prioritize='Population', proj='wgs4')
     model = EnergyMaximizeReturn(nwp)
-    model.sequence()
-    #todo:  check the result
+    results = model.sequence()
+
+    node_ids = results['Sequence..Vertex.id']
+    sequence_ids = results['Sequence..Far.sighted.sequence']
+    actual_node_rank = dict(zip(node_ids, sequence_ids))
+    actual_edge_rank = {k: v['rank'] for k, v in 
+                        model.networkplan.network.edge.iteritems()}
+    assert node_rank == actual_node_rank,\
+           "Node sequencing is not what was expected"
+    assert edge_rank == actual_edge_rank,\
+           "Edge sequencing is not what was expected"
 
  
 class TestNetworkPlan(NetworkPlan):

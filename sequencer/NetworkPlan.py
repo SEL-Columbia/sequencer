@@ -21,8 +21,8 @@ class NetworkPlan(object):
     TOL = .5 # meters at the equator, tolerance is stricter towards the poles
 
     def __init__(self, network, metrics, **kwargs):
-        self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
-        self.proj = kwargs['proj'] if 'proj' in kwargs else 'utm'
+        self.priority_metric = kwargs.get('prioritize', 'population')
+        self.proj = kwargs.get('proj', 'utm')
 
         # FIXME:
         # Remove the dependency that sequencer has on the
