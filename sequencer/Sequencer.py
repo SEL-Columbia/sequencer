@@ -84,6 +84,13 @@ class Sequencer(object):
                 else:
                     metric = np.inf
 
+                """
+                if isinstance(metric, pd.Series):
+                    metric = set(metric)
+                    assert len(metric) == 1
+                    metric = metric.pop()
+                """
+
                 if metric > max_:
                     # Update the metric and potential candidate
                     max_ = metric 
