@@ -198,9 +198,7 @@ class Sequencer(object):
         return self.accumulate.cache[n]
 
     def output(self, path):
-        print self.output_frame
         self.output_frame.to_csv(os.path.join(path, 'xyz.csv'), index=False, na_rep='NaN')
-        print 1
 
         out_results = 'sequenced-results.csv'
         out_shp = 'sequenced-network'
@@ -214,8 +212,6 @@ class Sequencer(object):
                 'Sequence..Upstream.id'          : int,
                 'Sequence..Far.sighted.sequence' : int}
 
-        print 2
-        
         for k,v in cast.iteritems():
             self.output_frame[k] = self.output_frame[k].fillna(-9223372036854775807).astype(v)        
         self.output_frame.to_csv(os.path.join(path, 'temp.csv'), index=False, na_rep='NaN')
@@ -229,19 +225,13 @@ class Sequencer(object):
                 else:
                     break
 
-        print 3
-
         with open(os.path.join(path, out_results), 'w') as f:
             f.write(buff)
         os.remove(os.path.join(path, 'temp.csv'))
 
-        print 4
-        
         # Trash the node shp files
         [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
                 for x in os.listdir(os.path.join(path, out_shp)) if 'node' in x]
-        print 5
-
 
     def _build_node_wkt(self):
         for node in self.networkplan.network.nodes():
@@ -312,7 +302,6 @@ class Sequencer(object):
         # orig = pd.read_csv(self.networkplan.csv_p, header=1)
         orig = pd.read_csv(self.networkplan.csv_p)
         orig.columns = parse_cols(orig)
-        print len(orig.index)
 
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
@@ -325,7 +314,6 @@ class Sequencer(object):
         self.output_frame = union[sorted_columns]
         self.output_frame = self.output_frame.drop(['m_coords', 'coords'], axis=1)
         self.output_frame['coords'] = list(self.output_frame[['X', 'Y']].itertuples(index=False))
-        print(len(self.output_frame.index))
                 
         # Assert Output frame has same number of rows as input
         try:
