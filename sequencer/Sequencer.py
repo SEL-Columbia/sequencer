@@ -134,13 +134,18 @@ class Sequencer(object):
     def upstream_distance(self, node):
         """Computes the edge distance from a node to it's parent"""
         parent = self.parent(node)
-        if parent != None:
-            return self.networkplan.distance_matrix[parent, node]
+        if parent is not None:
+            return self.networkplan._distance(parent, node)
         return 0.0
 
     def sequence(self):
-        self.results = pd.DataFrame(self._sequence()).set_index('Sequence..Far.sighted.sequence')
+        """
+        Compute the sequence (aka rank) of nodes and edges 
         
+        This modifies the NetworkPlan member (so make a deep copy if you 
+        need the original)
+        """
+        self.results = pd.DataFrame(self._sequence(), dtype=object).set_index('Sequence..Far.sighted.sequence')
         # Post process for output
         self._build_node_wkt()
         self._build_edge_wkt()
@@ -242,10 +247,10 @@ class Sequencer(object):
         r = self.results
         # Iterate through the nodes and their parent
         for rank, fnode, tnode in zip(r.index, r['Sequence..Upstream.id'], r['Sequence..Vertex.id']):
-            if not np.isnan(fnode):
+            if fnode is not None:
                 # Set the edge attributes with those found in sequencing
                 self.networkplan.network.edge[fnode][tnode]['rank'] = int(rank)
-                self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan.distance_matrix[fnode, tnode])
+                self.networkplan.network.edge[fnode][tnode]['distance'] = float(self.networkplan._distance(fnode, tnode))
                 self.networkplan.network.edge[fnode][tnode]['id'] = int(tnode)
                 fnode_coords = self.networkplan.coords[fnode]
                 tnode_coords = self.networkplan.coords[tnode]
@@ -298,11 +303,9 @@ class Sequencer(object):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
         
         logger.info('Joining Sequencer Results on Input Metrics')
-        
-        # orig = pd.read_csv(self.networkplan.csv_p, header=1)
-        orig = pd.read_csv(self.networkplan.csv_p)
+        # FIXME:  Remove this dependency on original_metrics
+        orig = self.networkplan.original_metrics
         orig.columns = parse_cols(orig)
-
         self.networkplan.metrics.index.name = 'Sequence..Vertex.id'
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
         

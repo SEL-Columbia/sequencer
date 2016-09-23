@@ -4,13 +4,11 @@ __author__ = 'Brandon Ogle'
 import fiona
 import numpy as np
 import networkx as nx
-from scipy.sparse import csr_matrix
-import scipy.sparse.csgraph as graph
 import pandas as pd
 import logging
 import copy
 
-from sequencer.Utils import prep_data, get_hav_distance, get_euclidean_dist
+from sequencer.Utils import prep_data, haversine_distance, euclidean_distance
 
 logger = logging.getLogger('sequencer')
 
@@ -19,44 +17,33 @@ class NetworkPlan(object):
     NetworkPlan containing NetworkPlanner proposed network and 
     accompanying nodal metrics
     
-    Parameters
-    ----------
-    shp : file or string (File, directory, or filename to read).
-    csv : string or file handle / StringIO.
-    
-    Example
-    ----------
-    NetworkPlan('/Users/blogle/Downloads/1643/networks-proposed.shp', 
-                '/Users/blogle/Downloads/1643/metrics-local.csv')
     """
     TOL = .5 # meters at the equator, tolerance is stricter towards the poles
 
-    def __init__(self, shp, csv, **kwargs):
-        self.shp_p, self.csv_p = shp, csv
-        self.priority_metric = kwargs['prioritize'] if 'prioritize' in kwargs else 'population'
+    def __init__(self, network, metrics, **kwargs):
+        self.priority_metric = kwargs.get('prioritize', 'population')
+        self.proj = kwargs.get('proj', 'longlat')
 
-        # logger.info('Asserting Input Projections Match')
-        # self._assert_proj_match(shp, csv)
+        # FIXME:
+        # Remove the dependency that sequencer has on the
+        # original metrics file (this is terrible coupling)
+        # see sequencer:_clean_results()
+        self._original_metrics = metrics
+        
+        self._init_helper(network, metrics)
 
-        from geometryIO import load
-        proj4 = load(shp)[0]
-        self.measure = 'haversine' if 'longlat' in proj4 else 'euclidean'
+    def _init_helper(self, network, metrics):
+        """
+        All initialization (cleaning up metrics, network, etc)
+        """
 
         # Load in and align input data
         logger.info('Aligning Network Nodes With Input Metrics')
-        self._network, self._metrics = prep_data( nx.read_shp(shp),
-                                                  # pd.read_csv(csv, header=1),
-                                                  pd.read_csv(csv),
-                                                  loc_tol = self.TOL)
+        self._network, self._metrics = prep_data(network, 
+                                                 metrics, 
+                                                 loc_tol = self.TOL)
 
-        logger.info('Computing Pairwise Distances')
-        self.distance_matrix = self._distance_matrix()
-         
-        if len(self.distance_matrix[(self.distance_matrix > 0) & (self.distance_matrix < self.TOL)]) > 0:
-            logger.error("""Dataset Contains Edges, Less Than {tolerance} Meters! 
-                          This can result in incorrect alignment of metrics and network, 
-                          where fake nodes are incorrectly assigned metrics. 
-                          This error is resolved by buffering your input data.""".format(tolerance=self.TOL))
+        self.coord_values = self.coords.values()
 
         # Set the edge weight to the distance between those nodes
         self._weight_edges()
@@ -74,27 +61,34 @@ class NetworkPlan(object):
         #Fillna values with Zero
         self._metrics = self.metrics.fillna(0)
 
-    def _distance_matrix(self):
-        """Returns the computed distance matrix"""
-
-        # Log the type of metric being used in Sequencing
-        logger.info('Using {} Distance'.format(self.measure))
-
-        # Convert the nodal coordinate tuples to a np.array
-        coords = np.vstack(map(np.array, self.coords.values()))
+    @classmethod 
+    def from_files(cls, shp, csv, **kwargs):
+        """
+        Parameters
+        ----------
+        shp : file or string (File, directory, or filename to read).
+        csv : string or file handle / StringIO.
         
-        if self.measure == 'haversine':
-            # Partially applied haversine function that takes a coord and computes the vector distances for all coords
-            haversine = lambda coord: get_hav_distance(coords[:, 0], coords[:, 1], *coord) 
-            # Map the partially applied function over all coordinates, and stack to a matrix
-            return np.vstack(map(haversine, coords))
+        Example
+        ----------
+        NetworkPlan.from_files('networks-proposed.shp', 
+                               'metrics-local.csv')
+        """
 
-        # Partially applied haversine function that takes a coord and computes the vector distances for all coords
-        euclidean = lambda coord: get_euclidean_dist(coords, coord)
-        # Map the partially applied function over all coordinates, and stack to a matrix
-        return np.vstack(map(euclidean, coords))
-    
-    
+        logger.info('Asserting Input Projections Match')
+
+        # cls._assert_proj_match(shp, csv)
+        # TODO: Developer should transform shapefile projection to match csv
+        # Use fiona to open the shapefile as this includes the projection type
+        
+        # shapefile = fiona.open(shp)
+        # Pass along the projection
+        # if 'proj' in shapefile.crs:
+            # kwargs['proj'] = shapefile.crs['proj']
+ 
+        return cls(nx.read_shp(shp), pd.read_csv(csv), **kwargs)
+
+    @classmethod
     def _assert_proj_match(self, shp, csv):
         """Ensure that the projections match before continuing"""
         # Use fiona to open the shapefile as this includes the projection type
@@ -115,16 +109,7 @@ class NetworkPlan(object):
                     logger.error("csv and shp Projections Don't Match")
                     raise AssertionError("csv and shapefile Projections Don't Match")
 
-        # Save the state of the projection
-        # self.proj = shapefile.crs['proj']
-        # Determine the type of distance measure based on the input projections
-        # measure = 'euclidean' if self.proj == 'utm' else 'haversine'
-        from geometryIO import load
-        proj4 = load(shp)[0]
-        self.measure = 'haversine' if 'longlat' in proj4 else 'euclidean'
-
     def assert_is_tree(self):
-
         in_degree = self.network.in_degree()
         # Test that all roots have in_degree == 0
         ensure_roots = [in_degree[root] == 0 for root in self.roots]
@@ -183,11 +168,36 @@ class NetworkPlan(object):
         else:
             return self.metrics[self.priority_metric].ix[nodes].idxmax()
 
+    def _distance(self, first_index, second_index):
+        """Calculate the distance between two points given their indices."""
+        distance_function = (
+            haversine_distance if 'longlat' in self.proj else
+            euclidean_distance
+        )
+        return distance_function(
+            self.coord_values[first_index], self.coord_values[second_index]
+        )
+
     def _weight_edges(self):
-        """sets the edge weights in the graph using the distance matrix"""
+        """Set the edge weights in the graph using a distance function."""
         weights = {}
+        logger.info('Using {} distance'.format(
+            'haversine' if 'longlat' in self.proj else 'euclidean'
+        ))
+
+        no_bad_edges_found = True
         for edge in self.network.edges():
-            weights[edge] = self.distance_matrix[edge]
+            distance = self._distance(edge[0], edge[1])
+            if no_bad_edges_found and distance < self.TOL:
+                no_bad_edges_found = False
+                logger.error(
+                    'Dataset contains edges less than {tolerance} meters! This'
+                    ' can result in incorrect alignment of metrics and'
+                    ' network, where fake nodes are incorrectly assigned'
+                    'metrics. This error is resolved by buffering your input'
+                    ' data.'.format(tolerance=self.TOL)
+                )
+            weights[edge] = distance
         nx.set_edge_attributes(self.network, 'weight', weights)
     
     def direct_network(self):
@@ -268,10 +278,14 @@ class NetworkPlan(object):
         return self._network
     
     @property
+    def original_metrics(self):
+        """returns the original (unprocessed) metrics data_frame"""
+        return self._original_metrics
+
+    @property
     def metrics(self):
         """returns the nodal metrics Pandas DataFrame"""
         return self._metrics
-
 
 def download_scenario(scenario_number, directory_name=None, username=None, password=None,
                       np_url='http://networkplanner.modilabs.org/'):
@@ -335,4 +349,4 @@ def download_scenario(scenario_number, directory_name=None, username=None, passw
     csv = os.path.join(directory_name, 'metrics-local.csv')
     shp = os.path.join(directory_name, 'network-proposed.shp')
 
-    return NetworkPlan(shp, csv)
+    return NetworkPlan.from_files(shp, csv)

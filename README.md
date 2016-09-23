@@ -231,10 +231,24 @@ package manager.
 
 ##Anaconda
 
+The simplest way to setup an environment is via [anaconda](https://docs.continuum.io/anaconda/index).  
+You'll need the python2.7 based install available [here](https://www.continuum.io/downloads).
+
+You'll need to make sure anaconda is in your PATH before running conda commands.  
+
+### For running
+
+Setting up Sequencer for running (i.e. not for development) can be done via:
+```bash
+conda create -n [your env] -c sel sequencer
+```
+
+### For development
 You can easily create a new env with the listed packages by running
 ```bash
-conda create -n [your env] -file requirements.txt
+conda create -n [your env] --file requirements.txt python=2.7
 ```
+
 You can build the package using the [recipe](https://github.com/SEL-Columbia/conda-recipes)
 
 If you plan to play with the sequencer interactively and want to output graphics like those above, you will need 
@@ -244,5 +258,3 @@ and built with
 ```bash 
 conda install -c https://conda.binstar.org/mhworth pygraphviz  
 ```
-
-
