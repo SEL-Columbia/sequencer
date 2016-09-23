@@ -22,7 +22,7 @@ class NetworkPlan(object):
 
     def __init__(self, network, metrics, **kwargs):
         self.priority_metric = kwargs.get('prioritize', 'population')
-        self.proj = kwargs.get('proj', 'utm')
+        self.proj = kwargs.get('proj', 'longlat')
 
         # FIXME:
         # Remove the dependency that sequencer has on the
@@ -79,14 +79,16 @@ class NetworkPlan(object):
 
         logger.info('Asserting Input Projections Match')
 
-        cls._assert_proj_match(shp, csv)
+        # cls._assert_proj_match(shp, csv)
+        # TODO: Developer should transform shapefile projection to match csv
         # Use fiona to open the shapefile as this includes the projection type
         
-        shapefile = fiona.open(shp)
+        # shapefile = fiona.open(shp)
         # Pass along the projection
-        kwargs['proj'] = shapefile.crs['proj']
+        # if 'proj' in shapefile.crs:
+            # kwargs['proj'] = shapefile.crs['proj']
  
-        return cls(nx.read_shp(shp), pd.read_csv(csv, header=1), **kwargs)
+        return cls(nx.read_shp(shp), pd.read_csv(csv), **kwargs)
 
     @classmethod
     def _assert_proj_match(self, shp, csv):
@@ -109,10 +111,7 @@ class NetworkPlan(object):
                     logger.error("csv and shp Projections Don't Match")
                     raise AssertionError("csv and shapefile Projections Don't Match")
 
-
-   
     def assert_is_tree(self):
-
         in_degree = self.network.in_degree()
         # Test that all roots have in_degree == 0
         ensure_roots = [in_degree[root] == 0 for root in self.roots]
@@ -174,7 +173,8 @@ class NetworkPlan(object):
     def _distance(self, first_index, second_index):
         """Calculate the distance between two points given their indices."""
         distance_function = (
-            euclidean_distance if self.proj == 'utm' else haversine_distance
+            haversine_distance if 'longlat' in self.proj else
+            euclidean_distance
         )
         return distance_function(
             self.coord_values[first_index], self.coord_values[second_index]
@@ -184,7 +184,7 @@ class NetworkPlan(object):
         """Set the edge weights in the graph using a distance function."""
         weights = {}
         logger.info('Using {} distance'.format(
-            'euclidean' if self.proj == 'utm' else 'haversine'
+            'haversine' if 'longlat' in self.proj else 'euclidean'
         ))
 
         no_bad_edges_found = True

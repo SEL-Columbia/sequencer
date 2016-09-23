@@ -6,7 +6,6 @@ from functools import wraps
 import networkx as nx
 import numpy as np
 import os
-import sys
 import logging
 from sequencer.Utils import parse_cols
 
@@ -32,10 +31,6 @@ def memoize(f):
             # Get the number of keys in the the cache and send to the progress meter
             if len(cache.keys()) != scope.last_prog:
                 scope.last_prog = len(cache.keys())
-                if self._progress_meter(scope.last_prog) == 1:
-                    # If the progress meter is already shown to be complete
-                    # Go to next line in console                
-                    sys.stdout.write('\n')
             
         return cache[key]
 
@@ -93,9 +88,6 @@ class Sequencer(object):
             # Remove the candidate from the Network and shift its downstream neighbors to the keys
             for item in network.pop(choice):
                 network.update(item) 
-            
-            sys.stdout.write('Solving Frontier of n = {}\n'.format(len(frontier)))
-            sys.stdout.flush()
 
             # Update the frontier
             frontier = network.keys()
@@ -208,7 +200,6 @@ class Sequencer(object):
                 'Sequence..Root.vertex.id'       : int ,
                 'Sequence..Upstream.id'          : int,
                 'Sequence..Far.sighted.sequence' : int}
-        
         for k,v in cast.iteritems():
             self.output_frame[k] = self.output_frame[k].fillna(-9223372036854775807).astype(v)        
         self.output_frame.to_csv(os.path.join(path, 'temp.csv'), index=False, na_rep='NaN')
@@ -225,7 +216,6 @@ class Sequencer(object):
         with open(os.path.join(path, out_results), 'w') as f:
             f.write(buff)
         os.remove(os.path.join(path, 'temp.csv'))
-        
         # Trash the node shp files
         [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
                 for x in os.listdir(os.path.join(path, out_shp)) if 'node' in x]
@@ -269,27 +259,6 @@ class Sequencer(object):
         # Fake nodes will have no parent
         return next(parent, None)
 
-    def _progress_meter(self, progress):
-        # Clear the line
-        sys.stdout.write('\n')
-        
-        # Divide the sequence progress by the number of nodes in the network minus the fakes
-        completed = 1.0 * progress / len(self.networkplan.network.nodes())
-
-        meter_ticks = completed * 100
-        # At every 2.5% completion update the progress bar
-        # If the percentage is less than 50% update the ticks before the percentage 
-        before = ''.join('##' if int(meter_ticks) >  x else '  ' for x in np.arange(02.5,  50, 2.5))
-        # If the percentage is greater than 50% update the ticks after the percentage 
-        after  = ''.join('##' if int(meter_ticks) >= x else '  ' for x in np.arange(52.5, 100, 2.5))
-        # Update the progress bar
-        sys.stdout.write('[{b} {prog:.2f}% {a}]'.format(b    = before, 
-                                               	        prog = np.around(meter_ticks, 2), 
-                                              	        a    = after))
-        sys.stdout.flush()
-        
-        return completed
-    
     def _clean_results(self):
         """This joins the sequenced results on the metrics dataframe and reappends the dropped rows"""
         
