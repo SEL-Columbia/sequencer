@@ -200,7 +200,6 @@ class Sequencer(object):
                 'Sequence..Root.vertex.id'       : int ,
                 'Sequence..Upstream.id'          : int,
                 'Sequence..Far.sighted.sequence' : int}
-
         for k,v in cast.iteritems():
             self.output_frame[k] = self.output_frame[k].fillna(-9223372036854775807).astype(v)        
         self.output_frame.to_csv(os.path.join(path, 'temp.csv'), index=False, na_rep='NaN')
@@ -217,7 +216,6 @@ class Sequencer(object):
         with open(os.path.join(path, out_results), 'w') as f:
             f.write(buff)
         os.remove(os.path.join(path, 'temp.csv'))
-
         # Trash the node shp files
         [os.remove(os.path.join(os.path.join(path, out_shp), x)) 
                 for x in os.listdir(os.path.join(path, out_shp)) if 'node' in x]

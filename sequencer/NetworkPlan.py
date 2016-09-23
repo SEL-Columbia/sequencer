@@ -32,6 +32,7 @@ class NetworkPlan(object):
         
         self._init_helper(network, metrics)
 
+
     def _init_helper(self, network, metrics):
         """
         All initialization (cleaning up metrics, network, etc)
@@ -60,6 +61,7 @@ class NetworkPlan(object):
 
         #Fillna values with Zero
         self._metrics = self.metrics.fillna(0)
+
 
     @classmethod 
     def from_files(cls, shp, csv, **kwargs):
