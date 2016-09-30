@@ -3,7 +3,6 @@ from setuptools import setup
 with open('requirements.txt') as f:
     required = list(f.read().splitlines())
 
-# Parse the version from the fiona module.
 with open('sequencer/__init__.py') as f:
     for line in f:
         if line.find("__version__") >= 0:
@@ -32,5 +31,6 @@ setup(
     long_description=open("README.md").read(),
 
     # Dependent packages (distributions)
-    install_requires= required
+    install_requires= required,
+    scripts = ["run_sequencer.py"]
 )
