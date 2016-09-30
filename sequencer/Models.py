@@ -4,7 +4,7 @@ class EnergyMaximizeReturn(Sequencer):
     """This class sequences a proposed electrification plan, optimizing for maximum Demand (kwh) / Distance (m)"""
     
     def nodal_demand(self, df):
-        return df['peak.demand.in.kw']
+        return df[self.nodal_demand_field]
     
     def _strip_cols(self):
       del (self.output_frame['nodal_demand'])

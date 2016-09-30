@@ -41,8 +41,16 @@ def memoize(f):
 
 class Sequencer(object):
     
-    def __init__(self, NetworkPlan):
+    def __init__(self, NetworkPlan, nodal_demand_field):
+        """
+        NetworkPlan: NetworkPlan object with network and metrics data to
+            perform sequencing with
+
+        nodal_demand_field:  name of field in metrics data containing the
+            demand for a node (used to drive sequencing)
+        """
         self.networkplan = NetworkPlan
+        self.nodal_demand_field = nodal_demand_field
         
         # Build a list of the fake nodes in the network
         self.fakes = self.networkplan.fake_nodes
@@ -126,15 +134,19 @@ class Sequencer(object):
     def sequence(self):
         """
         Compute the sequence (aka rank) of nodes and edges 
-        
+        optimizing for maximum Demand  / Distance 
+
         This modifies the NetworkPlan member (so make a deep copy if you 
         need the original)
+
         """
         self.results = pd.DataFrame(self._sequence(), dtype=object).set_index('Sequence..Far.sighted.sequence')
         # Post process for output
         self._build_node_wkt()
         self._build_edge_wkt()
         self._clean_results()
+        
+        del (self.output_frame['nodal_demand'])
     
         return self.output_frame
 
@@ -294,5 +306,5 @@ class Sequencer(object):
 
         
     def nodal_demand(self, df):
-        """Overload this method to compute your nodal demand"""
-        raise NotImplemented()
+        """Get nodal demand from metrics dataframe"""
+        return df[self.nodal_demand_field]
