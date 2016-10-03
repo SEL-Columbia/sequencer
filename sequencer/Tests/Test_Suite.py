@@ -25,23 +25,24 @@ def gen_data():
     """
     network = nx.balanced_tree(2, 2)
 
-    metrics = DataFrame(network.node).T
+    metrics = DataFrame()
 
-    metrics['Demand'] =     [np.nan, 100, 50, 25, 12, 6, 3]
-    metrics['Population'] = [np.nan, 100, 50, 25, 12, 6, 3]
+    metrics['Demand'] =     [100, 50, 25, 12, 6, 3]
+    metrics['Population'] = [100, 50, 25, 12, 6, 3]
     #level 0 
-    metrics['coords'] = [np.array([125,10]) for x in  metrics.index]
-    #level 2
-    metrics['coords'].ix[1] = metrics['coords'].ix[0] + [-.5, -.25]
-    metrics['coords'].ix[2] = metrics['coords'].ix[0] + [+.5, -.25]
-    #level 3
-    metrics['coords'].ix[3] = metrics['coords'].ix[1] + [-.25, -.25]
-    metrics['coords'].ix[4] = metrics['coords'].ix[1] + [+.25, -.25]
-    metrics['coords'].ix[5] = metrics['coords'].ix[2] + [-.25, -.25]
-    metrics['coords'].ix[6] = metrics['coords'].ix[2] + [+.25, -.25]
-    metrics['coords'] = metrics['coords'].apply(tuple)
-
-    nx.set_node_attributes(network, 'coords', metrics.coords.to_dict())
+    base_coord = np.array([125, 10])
+    coord_dict = {0: np.array([125, 10])}
+    coord_dict[1] = coord_dict[0] + [-.5, -.25]
+    coord_dict[2] = coord_dict[0] + [+.5, -.25]
+    coord_dict[3] = coord_dict[1] + [-.25, -.25]
+    coord_dict[4] = coord_dict[1] + [+.25, -.25]
+    coord_dict[5] = coord_dict[2] + [-.25, -.25]
+    coord_dict[6] = coord_dict[2] + [+.25, -.25]
+                                   
+    # assign x, y
+    metrics['X'] = [coord_dict[i][0] for i in range(1, 7)]
+    metrics['Y'] = [coord_dict[i][1] for i in range(1, 7)]
+    nx.set_node_attributes(network, 'coords', coord_dict)
     #nx.draw(network, nx.get_node_attributes(network, 'coords'))
     
     return metrics, network.to_directed()
@@ -116,7 +117,7 @@ def test_sequencer_with_fakes():
     # for now, just make sure it runs without exceptions
     metrics, network, node_rank, edge_rank = gen_data_with_fakes()
     nwp = NetworkPlan(network, metrics, prioritize='Population', proj='wgs4')
-    model = EnergyMaximizeReturn(nwp)
+    model = Sequencer(nwp, 'Demand...Projected.nodal.demand.per.year')
     results = model.sequence()
 
     node_ids = results['Sequence..Vertex.id']
@@ -130,36 +131,17 @@ def test_sequencer_with_fakes():
            "Edge sequencing is not what was expected"
 
  
-class TestNetworkPlan(NetworkPlan):
-    
-    def __init__(self):
-        self._metrics, self._network = gen_data()
-        self.proj = 'wgs4'
-        self.priority_metric = 'Population'
-        self.coord_values = self.coords.values()
+def get_network_plan():
         
-        # Set the edge weight to the distance between those nodes                                                                                                             
-        self._weight_edges()
+    metrics, network = gen_data()
+    nwp = NetworkPlan(network, metrics, prioritize="Population", proj="wgs4")
+    nwp.fake_nodes = [0]
+    return nwp
 
-        # Transform edges to a rooted graph                                                                                                                                   
-        self.direct_network()
-        
-        # List of fake nodes
-        self.fake_nodes = [0]
-
-        # Fillna with 0
-        self._metrics = self.metrics.fillna(0)
-
-class TestSequencer(Sequencer):
-    
-    def nodal_demand(self, df):
-        return df['Demand']
-    def sequence(self):
-        return DataFrame(list(self._sequence())).set_index('Sequence..Far.sighted.sequence')
 
 def test_is_tree():
     """Ensures all roots have in_degree of 0 and leaves have in_degree of 1"""
-    nwp = TestNetworkPlan()
+    nwp = get_network_plan()
     in_degree = nwp.network.in_degree()
     # Test that all roots have in_degree == 0
     ensure_roots = [in_degree[root] == 0 for root in nwp.roots]
@@ -171,9 +153,9 @@ def test_is_tree():
 def test_accumulate_demand():
     """Tests that the accumulated demand is correct"""
     
-    nwp = TestNetworkPlan()
+    nwp = get_network_plan()
     # Build dictionary of accumulated values for each node
-    acc_dicts =  {node : TestSequencer(nwp).accumulate(node) for node in nwp.network.node.keys()}
+    acc_dicts =  {node : Sequencer(nwp, 'Demand').accumulate(node) for node in nwp.network.node.keys()}
     # Dictionary of known accumulated demand computed manually
     demands = {0: (100 + 50 + 25 + 12 + 6 + 3), 
                1: (100 + 25 + 12), 
@@ -186,9 +168,9 @@ def test_accumulate_demand():
 def test_accumulate_cost():
     """Tests that the accumulates costs are correct"""
 
-    nwp = TestNetworkPlan()
+    nwp = get_network_plan()
     # Build dictionary of accumulated values for each node
-    acc_dicts = {node : TestSequencer(nwp).accumulate(node) for node in nwp.network.node.keys()}
+    acc_dicts = {node : Sequencer(nwp, 'Demand').accumulate(node) for node in nwp.network.node.keys()}
     def get_distance(f, t):
         return nwp._distance(f, t)
 
@@ -203,14 +185,13 @@ def test_accumulate_cost():
              5 : get_distance(2, 5),
              6 : get_distance(2, 6)}
 
-
     costs = {node : (acc_dicts[node]['cost'], costs[node]) for node in nwp.network.node.keys()}
     eq_(np.all(map(lambda tup: np.allclose(*tup), costs.values())), True)
 
 def test_sequencer_follows_topology():
     """Tests that the sequencer doesn't skip nodes in the network"""
-    nwp = TestNetworkPlan()
-    model = TestSequencer(nwp)
+    nwp = get_network_plan()
+    model = Sequencer(nwp, 'Demand')
     results = model.sequence()
     fnodes = results['Sequence..Upstream.id']
     node_seq_num = {node: seq_num for seq_num, node in 
@@ -229,7 +210,7 @@ def test_sequencer_compare():
     csv_file = os.path.join(input_dir, "metrics-local.csv")
     shp_file = os.path.join(input_dir, "networks-proposed.shp")
     nwp = NetworkPlan.from_files(shp_file, csv_file, prioritize='Population')
-    model = EnergyMaximizeReturn(nwp)
+    model = Sequencer(nwp, 'Demand...Projected.nodal.demand.per.year')
 
     model.sequence()
 

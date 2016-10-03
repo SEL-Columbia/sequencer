@@ -77,39 +77,23 @@ class NetworkPlan(object):
                                'metrics-local.csv')
         """
 
-        logger.info('Asserting Input Projections Match')
-
-        # cls._assert_proj_match(shp, csv)
-        # TODO: Developer should transform shapefile projection to match csv
-        # Use fiona to open the shapefile as this includes the projection type
-        
-        # shapefile = fiona.open(shp)
-        # Pass along the projection
-        # if 'proj' in shapefile.crs:
-            # kwargs['proj'] = shapefile.crs['proj']
+        # Only supports longlat format for now
+        # with fiona.open(shp) as shapefile:
+        #     # Pass along the projection
+        #     if 'proj' in shapefile.crs:
+        #         kwargs['proj'] = shapefile.crs['proj']
  
-        return cls(nx.read_shp(shp), pd.read_csv(csv), **kwargs)
+        # Ignore the PROJ.4 header if there
+        skip_rows = 0
+        with open(csv) as csv_stream:
+            if csv_stream.readline().startswith('PROJ.4'):
+                skip_rows = 1
 
-    @classmethod
-    def _assert_proj_match(self, shp, csv):
-        """Ensure that the projections match before continuing"""
-        # Use fiona to open the shapefile as this includes the projection type
-        shapefile = fiona.open(shp)
-        # read the first line of the csv to get the projection
-        csv_proj = open(csv).readline()
+        # networkx read_shp fails on unicode paths, so try ascii
+        if isinstance(shp, unicode):
+            shp = shp.encode("ascii")
 
-        # Parse the Projection to a dictionary
-        csv_proj = csv_proj.split('PROJ.4')[1]
-        pairs = [x.split('=') for x in csv_proj.split(' +') if x != '' and '=' in x]
-        csv_proj = {x[0]:x[1] for x in pairs}
-        # Iterate through and ensure all values match in both projection dicts
-        for key in csv_proj.keys():
-            if key in csv_proj and key in shapefile.crs:
-                try:
-                    assert(str(csv_proj[key]) == str(shapefile.crs[key]))
-                except:
-                    logger.error("csv and shp Projections Don't Match")
-                    raise AssertionError("csv and shapefile Projections Don't Match")
+        return cls(nx.read_shp(shp), pd.read_csv(csv, skiprows=skip_rows), **kwargs)
 
     def assert_is_tree(self):
         in_degree = self.network.in_degree()
@@ -147,7 +131,7 @@ class NetworkPlan(object):
         """applies a filter to the input nodes, returning the subset representing fake nodes"""
 
         # get a view of the DataFrame without positional columns
-        non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords', 'm_coords']].ix[nodes]
+        non_positional = self.metrics[self.metrics.columns.difference(['X', 'Y', 'coords', 'm_coords'])].ix[nodes]
         # find rows that are all null, these are the nodes representing the connection to existing infastructure
         return non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
    
