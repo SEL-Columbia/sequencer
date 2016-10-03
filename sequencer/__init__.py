@@ -2,7 +2,7 @@ import logging
 from .NetworkPlan import NetworkPlan
 from .Sequencer import Sequencer
  
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 logger = logging.getLogger('sequencer')
 logger.setLevel(logging.INFO)

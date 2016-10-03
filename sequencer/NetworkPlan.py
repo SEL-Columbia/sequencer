@@ -77,14 +77,23 @@ class NetworkPlan(object):
                                'metrics-local.csv')
         """
 
-        # Up to user to ensure that csv and shapefile match projection
-        # Set it via shapefile
-        with fiona.open(shp) as shapefile:
-            # Pass along the projection
-            if 'proj' in shapefile.crs:
-                kwargs['proj'] = shapefile.crs['proj']
+        # Only supports longlat format for now
+        # with fiona.open(shp) as shapefile:
+        #     # Pass along the projection
+        #     if 'proj' in shapefile.crs:
+        #         kwargs['proj'] = shapefile.crs['proj']
  
-        return cls(nx.read_shp(shp), pd.read_csv(csv), **kwargs)
+        # Ignore the PROJ.4 header if there
+        skip_rows = 0
+        with open(csv) as csv_stream:
+            if csv_stream.readline().startswith('PROJ.4'):
+                skip_rows = 1
+
+        # networkx read_shp fails on unicode paths, so try ascii
+        if isinstance(shp, unicode):
+            shp = shp.encode("ascii")
+
+        return cls(nx.read_shp(shp), pd.read_csv(csv, skiprows=skip_rows), **kwargs)
 
     def assert_is_tree(self):
         in_degree = self.network.in_degree()
@@ -122,7 +131,7 @@ class NetworkPlan(object):
         """applies a filter to the input nodes, returning the subset representing fake nodes"""
 
         # get a view of the DataFrame without positional columns
-        non_positional = self.metrics[self.metrics.columns - ['X', 'Y', 'coords', 'm_coords']].ix[nodes]
+        non_positional = self.metrics[self.metrics.columns.difference(['X', 'Y', 'coords', 'm_coords'])].ix[nodes]
         # find rows that are all null, these are the nodes representing the connection to existing infastructure
         return non_positional[np.all(pd.isnull(non_positional) == True, axis=1)].index.values
    

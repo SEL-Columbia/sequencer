@@ -282,7 +282,7 @@ class Sequencer(object):
         sequenced_metrics = pd.merge(self.networkplan.metrics.reset_index(), self.results.reset_index(), on='Sequence..Vertex.id')
         
         orig['m_coords'] = list(orig[['X', 'Y']].itertuples(index=False))
-        cols_to_join_on = (sequenced_metrics.columns - orig.columns).tolist() + ['m_coords']
+        cols_to_join_on = (sequenced_metrics.columns.difference(orig.columns)).tolist() + ['m_coords']
         union = pd.merge(orig, sequenced_metrics[cols_to_join_on], on='m_coords', how='outer')
         
         sorted_columns = orig.columns.tolist() + list(set(sequenced_metrics.columns) - set(orig.columns))
