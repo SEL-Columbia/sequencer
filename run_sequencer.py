@@ -20,7 +20,6 @@ logger.info(
 parser = argparse.ArgumentParser(
     description="Run sequencer on networkplanner output"
     " (metrics csv and network shp)")
-
 parser.add_argument("--working_directory", "-w",
     default=".", 
     help="base directory which input paths are relative to")

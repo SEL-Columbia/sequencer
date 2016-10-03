@@ -77,39 +77,14 @@ class NetworkPlan(object):
                                'metrics-local.csv')
         """
 
-        logger.info('Asserting Input Projections Match')
-
-        # cls._assert_proj_match(shp, csv)
-        # TODO: Developer should transform shapefile projection to match csv
-        # Use fiona to open the shapefile as this includes the projection type
-        
-        # shapefile = fiona.open(shp)
-        # Pass along the projection
-        # if 'proj' in shapefile.crs:
-            # kwargs['proj'] = shapefile.crs['proj']
+        # Up to user to ensure that csv and shapefile match projection
+        # Set it via shapefile
+        with fiona.open(shp) as shapefile:
+            # Pass along the projection
+            if 'proj' in shapefile.crs:
+                kwargs['proj'] = shapefile.crs['proj']
  
         return cls(nx.read_shp(shp), pd.read_csv(csv), **kwargs)
-
-    @classmethod
-    def _assert_proj_match(self, shp, csv):
-        """Ensure that the projections match before continuing"""
-        # Use fiona to open the shapefile as this includes the projection type
-        shapefile = fiona.open(shp)
-        # read the first line of the csv to get the projection
-        csv_proj = open(csv).readline()
-
-        # Parse the Projection to a dictionary
-        csv_proj = csv_proj.split('PROJ.4')[1]
-        pairs = [x.split('=') for x in csv_proj.split(' +') if x != '' and '=' in x]
-        csv_proj = {x[0]:x[1] for x in pairs}
-        # Iterate through and ensure all values match in both projection dicts
-        for key in csv_proj.keys():
-            if key in csv_proj and key in shapefile.crs:
-                try:
-                    assert(str(csv_proj[key]) == str(shapefile.crs[key]))
-                except:
-                    logger.error("csv and shp Projections Don't Match")
-                    raise AssertionError("csv and shapefile Projections Don't Match")
 
     def assert_is_tree(self):
         in_degree = self.network.in_degree()
