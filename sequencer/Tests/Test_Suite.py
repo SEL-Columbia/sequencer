@@ -5,7 +5,6 @@ import os
 from pandas import DataFrame
 import pandas as pd
 from sequencer import NetworkPlan, Sequencer
-from sequencer.Models import EnergyMaximizeReturn
 from nose.tools import eq_ 
 
 import sys
