@@ -28,11 +28,11 @@ def load_arguments(value_by_key):
     """
 
     configuration_path = value_by_key.pop('configuration_path')
-    working_path = value_by_key.pop('working_path')
+    input_path = value_by_key.pop('input_path')
 
     if configuration_path:
-        if working_path and not os.path.isabs(configuration_path):
-            configuration_path = os.path.join(working_path, configuration_path)
+        if input_path and not os.path.isabs(configuration_path):
+            configuration_path = os.path.join(input_path, configuration_path)
         g = json.load(open(configuration_path))
     else:
         g = {}
@@ -43,11 +43,13 @@ def load_arguments(value_by_key):
             continue
         g[k] = v
 
-    # Resolve relative paths using source_folder
-    if working_path:
+    # Resolve input paths
+    if input_path:
         for k, v in g.items():
-            if k.endswith('_path') and v and not os.path.isabs(v):
-                g[k] = os.path.join(working_path, v)
+            if k.endswith('_path') and \
+                not k.startswith('output') and \
+                v and not os.path.isabs(v):
+                g[k] = os.path.join(input_path, v)
     return g
 
 parser = argparse.ArgumentParser(
@@ -55,8 +57,8 @@ parser = argparse.ArgumentParser(
     " (metrics csv and network shp)")
 parser.add_argument("--configuration_path", "-c",
     help="json configuration file")
-parser.add_argument("--working_path", "-w",
-    help="base directory which all paths are relative to")
+parser.add_argument("--input_path", "-i",
+    help="directory which all input paths are relative to")
 parser.add_argument("--metrics_path", "-m", 
     help="metrics csv filename")
 parser.add_argument("--network_path", "-n", 
