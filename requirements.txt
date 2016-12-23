@@ -1,9 +1,9 @@
 scipy
-dateutil
+# dateutil
 decorator
 fiona
-freetype
-gdal
+# freetype
+# gdal
 matplotlib
 networkx
 numexpr
