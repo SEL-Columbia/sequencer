@@ -53,7 +53,7 @@ def prep_data(network, metrics, loc_tol=.5):
     node_df['m_coords'] = node_df['m_coords'].apply(tuple)
     
     # now that we have identical metric coords in both node_df and metrics join on that column
-    metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort_values()
+    metrics = pd.merge(metrics, node_df, on='m_coords', left_index=True).sort_index()
 
     # TODO: Remove fuzzy matching and accept nodes and edges from same file
     #drop duplicate matches
@@ -66,7 +66,7 @@ def prep_data(network, metrics, loc_tol=.5):
     fake_nodes['m_coords'] = fake_nodes['m_coords'].apply(lambda x: ())
     
     # tack the fake nodes on to the matched metrics (all values are NULL, except coord)
-    metrics = pd.concat([closest_match, fake_nodes]).sort_values()
+    metrics = pd.concat([closest_match, fake_nodes]).sort_index()
     
     # finally assume Network edges are bi-directional
     network = network.to_undirected().to_directed()
